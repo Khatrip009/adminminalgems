@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const login = async (email: string, password: string) => {
-    const data = await apiFetch<LoginResponse>("/auth/login", {
+    const data = await apiFetch<LoginResponse>("api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
