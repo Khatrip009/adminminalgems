@@ -1,6 +1,6 @@
 // src/App.tsx
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./layouts/AdminLayout";
@@ -59,12 +59,11 @@ import AdminShippingRulesPage from "./pages/AdminShippingRulesPage";
 /* Analytics */
 import AdminAnalyticsOverviewPage from "./pages/AdminAnalyticsOverviewPage";
 
-/* export handling */
+/* Export handling */
 import ExportsPage from "./pages/ExportsPage";
 import ExportHistoryPage from "./pages/ExportHistoryPage";
 
-
-/* account management */
+/* Account management */
 import AdminProfilePage from "./pages/AdminProfilePage";
 import AdminChangePasswordPage from "./pages/AdminChangePasswordPage";
 import AdminSecurityLogsPage from "./pages/AdminSecurityLogsPage";
@@ -72,89 +71,90 @@ import AdminSecurityAlertsPage from "./pages/AdminSecurityAlertsPage";
 
 const App: React.FC = () => {
   return (
-    <Routes>
+    <HashRouter>
+      <Routes>
 
-      {/* ---------------------------------------------------
-           PUBLIC CUSTOMER ROUTES (minimal - returns only)
-      ---------------------------------------------------- */}
-      <Route path="/login" element={<LoginPage />} />
+        {/* ---------------------------
+              PUBLIC ROUTES
+        ---------------------------- */}
+        <Route path="/login" element={<LoginPage />} />
 
-      {/* Customer Return Workflow */}
-      <Route path="/return/request" element={<ReturnRequestPage />} />
-      <Route path="/return/confirmation" element={<ReturnConfirmationPage />} />
-      <Route path="/account/returns" element={<AccountReturnsPage />} />
+        <Route path="/return/request" element={<ReturnRequestPage />} />
+        <Route path="/return/confirmation" element={<ReturnConfirmationPage />} />
+        <Route path="/account/returns" element={<AccountReturnsPage />} />
 
-      {/* ---------------------------------------------------
-           ADMIN PROTECTED DASHBOARD
-      ---------------------------------------------------- */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
+        {/* ---------------------------
+              ADMIN ROUTES
+        ---------------------------- */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
 
-        {/* Dashboard */}
-        <Route index element={<DashboardHome />} />
+          <Route index element={<DashboardHome />} />
 
-        {/* CRM */}
-        <Route path="leads" element={<LeadsPage />} />
-        <Route path="notifications" element={<NotificationsAdminPage />} />
-        <Route path="customers" element={<AdminCustomersPage />} />
-        <Route path="users" element={<AdminUsersPage />} />
+          {/* CRM */}
+          <Route path="leads" element={<LeadsPage />} />
+          <Route path="notifications" element={<NotificationsAdminPage />} />
+          <Route path="customers" element={<AdminCustomersPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
 
-        {/* Profile Management */}
-        <Route path="/profile" element={<AdminProfilePage />} />
-        <Route path="/security/change-password" element={<AdminChangePasswordPage />} />
-        <Route path="/security/logins" element={<AdminSecurityLogsPage />} />
-        <Route path="/security/alerts" element={<AdminSecurityAlertsPage />} />
+          {/* Profile */}
+          <Route path="profile" element={<AdminProfilePage />} />
+          <Route path="security/change-password" element={<AdminChangePasswordPage />} />
+          <Route path="security/logins" element={<AdminSecurityLogsPage />} />
+          <Route path="security/alerts" element={<AdminSecurityAlertsPage />} />
 
-        {/* Catalog */}
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="products/:slug" element={<ProductDetailPage />} />
+          {/* Catalog */}
+          <Route path="categories" element={<CategoriesPage />} />
+          <Route path="products" element={<ProductsPage />} />
+          <Route path="products/:slug" element={<ProductDetailPage />} />
 
-        {/* Orders */}
-        <Route path="orders" element={<AdminOrdersPage />} />
-        <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+          {/* Orders */}
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="orders/:id" element={<AdminOrderDetailPage />} />
 
-        {/* Payments */}
-        <Route path="payments" element={<AdminPaymentsPage />} />
-        <Route path="payments/:id" element={<AdminPaymentDetailPage />} />
+          {/* Payments */}
+          <Route path="payments" element={<AdminPaymentsPage />} />
+          <Route path="payments/:id" element={<AdminPaymentDetailPage />} />
 
-        {/* Invoices */}
-        <Route path="invoices" element={<AdminInvoicesPage />} />
-        <Route path="invoices/:id" element={<AdminInvoiceDetailPage />} />
+          {/* Invoices */}
+          <Route path="invoices" element={<AdminInvoicesPage />} />
+          <Route path="invoices/:id" element={<AdminInvoiceDetailPage />} />
 
-        {/* Returns */}
-        <Route path="returns" element={<AdminReturnsPage />} />
-        <Route path="returns/:id" element={<AdminReturnDetailPage />} />
+          {/* Returns */}
+          <Route path="returns" element={<AdminReturnsPage />} />
+          <Route path="returns/:id" element={<AdminReturnDetailPage />} />
 
-        {/* Settlements */}
-        <Route path="settlements" element={<AdminSettlementPage />} />
+          {/* Settlements */}
+          <Route path="settlements" element={<AdminSettlementPage />} />
 
-        {/* Marketing */}
-        <Route path="marketing/promos" element={<AdminPromoCodesPage />} />
+          {/* Marketing */}
+          <Route path="marketing/promos" element={<AdminPromoCodesPage />} />
 
-        {/* Settings */}
-        <Route path="settings/tax-rules" element={<AdminTaxRulesPage />} />
-        <Route path="settings/shipping-methods" element={<AdminShippingMethodsPage />} />
-        <Route path="settings/shipping-rules" element={<AdminShippingRulesPage />} />
+          {/* Settings */}
+          <Route path="settings/tax-rules" element={<AdminTaxRulesPage />} />
+          <Route path="settings/shipping-methods" element={<AdminShippingMethodsPage />} />
+          <Route path="settings/shipping-rules" element={<AdminShippingRulesPage />} />
 
-        {/* Analytics */}
-        <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
+          {/* Analytics */}
+          <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
 
-        {/* export handling */}
-        <Route path="/exports" element={<ExportsPage />} />
-        <Route path="/history" element={<ExportHistoryPage/>} />
+          {/* Exports */}
+          <Route path="exports" element={<ExportsPage />} />
+          <Route path="history" element={<ExportHistoryPage />} />
 
-      </Route>
+        </Route>
 
-      {/* Fallback → send to login */}
-      <Route path="*" element={<LoginPage />} />
-    </Routes>
+        {/* Fallback */}
+        <Route path="*" element={<LoginPage />} />
+
+      </Routes>
+    </HashRouter>
   );
 };
 
