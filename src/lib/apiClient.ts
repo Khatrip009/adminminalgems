@@ -10,7 +10,7 @@ export interface ApiResponse<T = any> {
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
-  "https://apiminalgems.exotech.co.in";
+  "https://apiminalgems.exotech.co.in/api";
 
 function getToken(): string | null {
   return localStorage.getItem("mg_admin_token");
