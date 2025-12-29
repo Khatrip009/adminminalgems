@@ -2,8 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
+
+  // Custom domain → root path
   base: "/",
 
   resolve: {
@@ -12,20 +14,30 @@ export default defineConfig({
     },
   },
 
-  server: {
-    port: 5173,
-    proxy: {
-      "/api": {
-        target: "http://localhost:4500",
-        changeOrigin: true,
-        secure: false,
-        ws: true,
-      },
-      "/uploads": {
-        target: "http://localhost:4500",
-        changeOrigin: true,
-        secure: false,
+  // DEV ONLY
+  ...(mode === "development" && {
+    server: {
+      port: 5173,
+      proxy: {
+        "/api": {
+          target: "https://apiminalgems.exotech.co.in",
+          changeOrigin: true,
+          secure: false,
+          ws: true,
+        },
+        "/uploads": {
+          target: "https://apiminalgems.exotech.co.in",
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
+  }),
+
+  // BUILD
+  build: {
+    outDir: "dist",
+    sourcemap: false,
+    emptyOutDir: true,
   },
-});
+}));
