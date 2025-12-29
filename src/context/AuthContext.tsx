@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { apiFetch } from "../lib/apiClient";
-import type { AuthUser, LoginResponse } from "../types/auth";
+import type { AuthUser } from "../types/auth";
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -15,84 +15,96 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const TOKEN_KEY = "mg_admin_token";
 const USER_KEY = "mg_admin_user";
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load from localStorage on first mount
+  /* ----------------------------------------------------
+     On mount → validate token using /auth/me
+  ---------------------------------------------------- */
   useEffect(() => {
-    try {
+    async function init() {
       const storedToken = localStorage.getItem(TOKEN_KEY);
-      const storedUser = localStorage.getItem(USER_KEY);
 
-      if (storedToken && storedUser) {
-        const parsedUser: AuthUser = JSON.parse(storedUser);
-        // admin-only dashboard: force role_id === 1
-        if (Number(parsedUser.role_id) === 1) {
-          setToken(storedToken);
-          setUser(parsedUser);
-        } else {
-          // not admin, force logout
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-        }
+      if (!storedToken) {
+        setLoading(false);
+        return;
       }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
+
+      try {
+        const me = await apiFetch("/auth/me");
+
+        if (me?.user?.role_id === 1) {
+          setUser(me.user);
+          setToken(storedToken);
+        } else {
+          logout();
+        }
+      } catch {
+        logout();
+      } finally {
+        setLoading(false);
+      }
     }
+
+    init();
   }, []);
 
+  /* ----------------------------------------------------
+     LOGIN
+  ---------------------------------------------------- */
   const login = async (email: string, password: string) => {
-    const data = await apiFetch<LoginResponse>("api/auth/login", {
+    const data = await apiFetch("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: { email, password },
     });
 
-    if (!data.ok) {
-      throw new Error(data.error || "Login failed");
+    if (!data.ok) throw new Error(data.error || "Login failed");
+
+    const u = data.user;
+    if (Number(u.role_id) !== 1) {
+      throw new Error("Access denied. Admins only.");
     }
 
-    // backend returns { id, email, full_name, role_id }
-    const loggedUser = data.user;
-
-    if (Number(loggedUser.role_id) !== 1) {
-      // only ADMIN allowed
-      throw new Error("Access denied: admin only");
-    }
-
-    setUser(loggedUser);
+    setUser(u);
     setToken(data.token);
+
     localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(loggedUser));
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
+  /* ----------------------------------------------------
+     LOGOUT (backend + frontend)
+  ---------------------------------------------------- */
+  const logout = async () => {
+    try {
+      await apiFetch("/auth/logout", { method: "POST" });
+    } catch {
+      /* ignore */
+    }
+
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+
+    setUser(null);
+    setToken(null);
+
+    window.location.href = "/login";
   };
 
-  const value: AuthContextValue = {
-    user,
-    token,
-    loading,
-    login,
-    logout,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{ user, token, loading, login, logout }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
+

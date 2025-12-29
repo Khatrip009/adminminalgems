@@ -1,5 +1,5 @@
 import React from "react";
-import type { NotificationItem } from "../../api/notifications.api";
+import type { NotificationItem } from "../../api/core/notifications.api";
 
 interface StatusPillProps {
   notification: NotificationItem;

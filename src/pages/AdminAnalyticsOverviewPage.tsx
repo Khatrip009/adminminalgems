@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { AdminPageHeader } from "../components/admin/AdminPageHeader";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   getVisitorSummary,
   getAdminReviewStats,
@@ -23,7 +23,7 @@ import {
   type VisitorMetrics,
   type AdminReviewStats,
   type PublicReviewStats,
-} from "../api/analytics.api";
+} from "@/api/system/analytics.api";
 
 interface AnalyticsState {
   visitors: VisitorMetrics | null;

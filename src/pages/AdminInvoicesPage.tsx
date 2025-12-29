@@ -11,11 +11,11 @@ import {
   CreditCard,
 } from "lucide-react";
 
-import { AdminPageHeader } from "../components/admin/AdminPageHeader";
-import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
-import { Button } from "../components/ui/Button";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/Button";
 
-import { getAllInvoices, type Invoice } from "../api/payments.api";
+import { getAllInvoices, type Invoice } from "@/api/inventory/payments.api";
 
 const money = (a: number, c = "INR") =>
   `${c} ${Number(a || 0).toLocaleString()}`;

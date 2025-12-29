@@ -1,25 +1,23 @@
-// src/config/adminNav.ts
 import type React from "react";
 import {
   LayoutDashboard,
-  Contact2,
-  Layers,
+  Database,
+  Store,
+  Users,
+  Gem,
   Package,
+  Shuffle,
+  FileText,
+  ClipboardList,
+  Hammer,
   ShoppingBag,
   CreditCard,
-  FileText,
-  RotateCcw,
   Receipt,
-  Users,
-  Tag,
-  Globe2,
   Truck,
-  Boxes,
-  UserSquare2,
-  Activity,
-  Bell,
-
-  // 🔥 Missing icons added
+  Globe2,
+  BarChart3,
+  Tag,
+  Settings,
   User,
   Lock,
   Clock,
@@ -30,7 +28,6 @@ export interface AdminNavItem {
   label: string;
   path: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  badge?: string;
 }
 
 export interface AdminNavSection {
@@ -39,93 +36,129 @@ export interface AdminNavSection {
 }
 
 export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
-  /* ---------------------------------------------------------
-   * DASHBOARD
-   * --------------------------------------------------------- */
+  /* =========================
+     DASHBOARD
+  ========================= */
   {
     title: "Dashboard",
     items: [
-      {
-        label: "Overview",
-        path: "/",
-        icon: LayoutDashboard,
-      },
+      { label: "Overview", path: "/admin", icon: LayoutDashboard },
     ],
   },
 
-  /* ---------------------------------------------------------
-   * ACCOUNT
-   * --------------------------------------------------------- */
+  /* =========================
+     MASTERS
+  ========================= */
   {
-    title: "Account",
+    title: "Masters",
     items: [
-      { label: "My Profile", path: "/profile", icon: User },
-      { label: "Change Password", path: "/security/change-password", icon: Lock },
-      { label: "Login Activity", path: "/security/logins", icon: Clock },
-      { label: "Security Alerts", path: "/security/alerts", icon: ShieldAlert },
+      { label: "Categories", path: "/admin/categories", icon: Database },
+      { label: "Products", path: "/admin/products", icon: Package },
+      { label: "Warehouses", path: "/admin/inventory/warehouses", icon: Store },
+      { label: "Craftsmen", path: "/admin/craftsmen", icon: Users },
+      { label: "Suppliers", path: "/admin/suppliers", icon: Store },
+      { label: "Customers", path: "/admin/customers", icon: Users },
     ],
   },
 
-  /* ---------------------------------------------------------
-   * CRM
-   * --------------------------------------------------------- */
+  /* =========================
+     PROCUREMENT
+  ========================= */
   {
-    title: "CRM",
+    title: "Procurement",
     items: [
-      { label: "Analytics", path: "/analytics", icon: Activity },
-      { label: "Leads", path: "/leads", icon: Contact2 },
-      { label: "Customers", path: "/customers", icon: UserSquare2 },
-      { label: "Users", path: "/users", icon: Users },
-      { label: "Notifications", path: "/notifications", icon: Bell },
+      { label: "Purchase Orders", path: "/admin/purchase-orders", icon: FileText },
+      { label: "Goods Receipt (GRN)", path: "/admin/grn", icon: Receipt },
+      { label: "Supplier Invoices", path: "/admin/supplier-invoices", icon: FileText },
+      { label: "Supplier Payments", path: "/admin/supplier-payments", icon: CreditCard },
+      { label: "Supplier Ledger", path: "/admin/supplier-ledger", icon: ClipboardList },
     ],
   },
 
-  /* ---------------------------------------------------------
-   * CATALOG
-   * --------------------------------------------------------- */
+  /* =========================
+     INVENTORY
+  ========================= */
   {
-    title: "Catalog",
+    title: "Inventory",
     items: [
-      { label: "Categories", path: "/categories", icon: Layers },
-      { label: "Products", path: "/products", icon: Package },
+      { label: "Diamond Packets", path: "/admin/inventory/packets", icon: Gem },
+      { label: "Stock Movements", path: "/admin/inventory/movements", icon: Shuffle },
+      { label: "Inventory Valuation", path: "/admin/inventory/valuation", icon: BarChart3 },
     ],
   },
 
-  /* ---------------------------------------------------------
-   * SALES
-   * --------------------------------------------------------- */
+  /* =========================
+     PRODUCTION
+  ========================= */
+  {
+    title: "Production",
+    items: [
+      { label: "Work Orders", path: "/admin/work-orders", icon: Hammer },
+      { label: "Create Work Order", path: "/admin/work-orders/create", icon: FileText },
+    ],
+  },
+
+  /* =========================
+     SALES
+  ========================= */
   {
     title: "Sales",
     items: [
-      { label: "Orders", path: "/orders", icon: ShoppingBag },
-      { label: "Payments", path: "/payments", icon: CreditCard },
-      { label: "Invoices", path: "/invoices", icon: FileText },
-      { label: "Returns", path: "/returns", icon: RotateCcw },
-      { label: "Settlements", path: "/settlements", icon: Receipt },
-
-      // Exports
-      { label: "Exports", path: "/exports", icon: FileText },
-      { label: "Export History", path: "/history", icon: FileText },
+      { label: "Orders", path: "/admin/orders", icon: ShoppingBag },
+      { label: "Invoices", path: "/admin/invoices", icon: FileText },
+      { label: "Payments", path: "/admin/payments", icon: CreditCard },
+      { label: "Returns", path: "/admin/returns", icon: Receipt },
+      { label: "Settlements", path: "/admin/settlements", icon: ClipboardList },
     ],
   },
 
-  /* ---------------------------------------------------------
-   * MARKETING
-   * --------------------------------------------------------- */
+  /* =========================
+     LOGISTICS & EXPORTS
+  ========================= */
   {
-    title: "Marketing",
-    items: [{ label: "Promo Codes", path: "/marketing/promos", icon: Tag }],
+    title: "Logistics & Exports",
+    items: [
+      { label: "Shipping Methods", path: "/admin/settings/shipping-methods", icon: Truck },
+      { label: "Shipping Rules", path: "/admin/settings/shipping-rules", icon: Truck },
+      { label: "Exports", path: "/admin/exports", icon: Globe2 },
+      { label: "Export History", path: "/admin/exports/history", icon: FileText },
+    ],
   },
 
-  /* ---------------------------------------------------------
-   * SETTINGS
-   * --------------------------------------------------------- */
+  /* =========================
+     CRM & MARKETING
+  ========================= */
   {
-    title: "Settings",
+    title: "CRM & Marketing",
     items: [
-      { label: "Tax Rules", path: "/settings/tax-rules", icon: Globe2 },
-      { label: "Shipping Methods", path: "/settings/shipping-methods", icon: Truck },
-      { label: "Shipping Rules", path: "/settings/shipping-rules", icon: Boxes },
+      { label: "Leads", path: "/admin/leads", icon: Users },
+      { label: "Notifications", path: "/admin/notifications", icon: ClipboardList },
+      { label: "Promo Codes", path: "/admin/promos", icon: Tag },
+    ],
+  },
+
+  /* =========================
+     REPORTS
+  ========================= */
+  {
+    title: "Reports",
+    items: [
+      { label: "Analytics", path: "/admin/analytics", icon: BarChart3 },
+    ],
+  },
+
+  /* =========================
+     SYSTEM & ACCOUNT
+  ========================= */
+  {
+    title: "System",
+    items: [
+      { label: "Users", path: "/admin/users", icon: Users },
+      { label: "Tax Rules", path: "/admin/settings/tax-rules", icon: Settings },
+      { label: "My Profile", path: "/admin/profile", icon: User },
+      { label: "Change Password", path: "/admin/security/change-password", icon: Lock },
+      { label: "Login Activity", path: "/admin/security/logins", icon: Clock },
+      { label: "Security Alerts", path: "/admin/security/alerts", icon: ShieldAlert },
     ],
   },
 ];

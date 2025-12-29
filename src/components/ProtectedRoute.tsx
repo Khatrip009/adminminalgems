@@ -1,33 +1,28 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-interface Props {
-  children: React.ReactNode;
-}
-
-const ProtectedRoute: React.FC<Props> = ({ children }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, token, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <p>Loading...</p>
+      <div className="w-full h-screen flex items-center justify-center text-slate-700">
+        Checking authentication…
       </div>
     );
   }
 
-  if (!user) {
+  if (!user || !token) {
+    // 🔐 Save intended route (for deep-link restore)
+    sessionStorage.setItem(
+      "postLoginRedirect",
+      location.pathname + location.search
+    );
+
     return <Navigate to="/login" replace />;
-  }
 
-  // we already ensure admin in AuthContext, but double-check:
-  if (Number(user.role_id) !== 1) {
-    return (
-      <div className="h-screen flex items-center justify-center text-red-600">
-        Access denied (admin only).
-      </div>
-    );
   }
 
   return <>{children}</>;

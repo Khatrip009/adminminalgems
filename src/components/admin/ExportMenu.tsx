@@ -14,7 +14,7 @@ import {
   exportOrdersZIP,
   exportShippingLabelsPDF,
   exportLeadsCSV,
-} from "../../api/export.api";
+} from "../../api/logistics/export.api";
 
 interface ExportMenuProps {
   orderIds?: string[]; // optional bulk export (not used yet)

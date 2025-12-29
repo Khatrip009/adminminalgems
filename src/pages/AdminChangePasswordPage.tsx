@@ -1,6 +1,6 @@
 // src/pages/admin/AdminChangePasswordPage.tsx
 import React, { useState } from "react";
-import { changePassword } from "../api/profile.api";
+import { changePassword } from "@/api/core/profile.api";
 import { Lock, ShieldCheck } from "lucide-react";
 
 export default function AdminChangePasswordPage() {

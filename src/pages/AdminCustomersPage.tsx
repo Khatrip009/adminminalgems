@@ -17,9 +17,9 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { AdminPageHeader } from "../components/admin/AdminPageHeader";
-import { listCustomers, type Customer } from "../api/customers.api";
-import CustomerPage from "./CustomerPage";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { listCustomers, type Customer } from "@/api/masters/customers.api";
+import CustomerPage from "@/pages/masters/customers/CustomerPage";
 
 const PAGE_LIMIT = 20;
 

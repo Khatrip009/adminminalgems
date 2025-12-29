@@ -13,8 +13,8 @@ import {
   List,
 } from "lucide-react";
 
-import { AdminPageHeader } from "../components/admin/AdminPageHeader";
-import type { Lead, LeadNote, LeadStatus } from "../api/leads.api";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import type { Lead, LeadNote, LeadStatus } from "@/api/crm/leads.api";
 import {
   addLeadNote,
   createLead,
@@ -23,8 +23,8 @@ import {
   fetchLeads,
   fetchLeadStats,
   updateLead,
-} from "../api/leads.api";
-import { toast } from "../lib/toast";
+} from "@/api/crm/leads.api";
+import { toast } from "@/lib/toast";
 
 const STATUS_OPTIONS: { value: LeadStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },

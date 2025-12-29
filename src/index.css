@@ -51,3 +51,12 @@ a:hover {
 .theme-fade * {
   transition: background-color 0.35s ease, color 0.35s ease;
 }
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slideLeft {
+  animation: slideLeft 0.25s ease-out;
+}

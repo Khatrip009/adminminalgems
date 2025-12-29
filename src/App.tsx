@@ -1,91 +1,130 @@
 // src/App.tsx
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./layouts/AdminLayout";
 
-/* ------------------------------
-   PUBLIC (Customer Return Flow)
--------------------------------- */
-import LoginPage from "./pages/LoginPage";
-import ReturnRequestPage from "./pages/ReturnRequestPage";
-import ReturnConfirmationPage from "./pages/ReturnConfirmationPage";
-import AccountReturnsPage from "./pages/AccountReturnsPage";
+/* =========================
+   PUBLIC
+========================= */
+import LoginPage from "./pages/auth/LoginPage";
+import ReturnRequestPage from "./pages/sales/returns/ReturnRequestPage";
+import ReturnConfirmationPage from "./pages/sales/returns/ReturnConfirmationPage";
+import AccountReturnsPage from "./pages/production/finance/returns/AccountReturnsPage";
 
-/* ------------------------------
-   ADMIN DASHBOARD
--------------------------------- */
-import DashboardHome from "./pages/DashboardHome";
+/* =========================
+   DASHBOARD
+========================= */
+import DashboardHome from "./pages/dashboard/DashboardHome";
 
-/* CRM */
-import LeadsPage from "./pages/LeadsPage";
-import NotificationsAdminPage from "./pages/NotificationsAdminPage";
-import AdminCustomersPage from "./pages/AdminCustomersPage";
-import AdminUsersPage from "./pages/AdminUsersPage";
-
-/* Catalog */
-import CategoriesPage from "./pages/CategoriesPage";
-import ProductsPage from "./pages/ProductsPage";
-import ProductDetailPage from "./pages/ProductDetailPage";
-
-/* Orders */
-import AdminOrdersPage from "./pages/AdminOrdersPage";
-import AdminOrderDetailPage from "./pages/AdminOrderDetailPage";
-
-/* Payments */
-import AdminPaymentsPage from "./pages/AdminPaymentsPage";
-import AdminPaymentDetailPage from "./pages/AdminPaymentDetailPage";
-
-/* Invoices */
-import AdminInvoicesPage from "./pages/AdminInvoicesPage";
-import AdminInvoiceDetailPage from "./pages/AdminInvoiceDetailPage";
-
-/* Returns */
-import AdminReturnsPage from "./pages/AdminReturnsPage";
-import AdminReturnDetailPage from "./pages/AdminReturnDetailPage";
-
-/* Settlements */
-import AdminSettlementPage from "./pages/AdminSettlementPage";
-
-/* Marketing */
-import AdminPromoCodesPage from "./pages/AdminPromoCodesPage";
-
-/* Settings */
-import AdminTaxRulesPage from "./pages/AdminTaxRulesPage";
-import AdminShippingMethodsPage from "./pages/AdminShippingMethodsPage";
-import AdminShippingRulesPage from "./pages/AdminShippingRulesPage";
-
-/* Analytics */
+/* =========================
+   CRM / REPORTS
+========================= */
 import AdminAnalyticsOverviewPage from "./pages/AdminAnalyticsOverviewPage";
+import LeadsPage from "./pages/LeadsPage";
+import NotificationsAdminPage from "./pages/system/notifications/NotificationsAdminPage";
 
-/* Export handling */
-import ExportsPage from "./pages/ExportsPage";
-import ExportHistoryPage from "./pages/ExportHistoryPage";
+/* =========================
+   SYSTEM USERS
+========================= */
+import AdminUsersPage from "./pages/system/users/AdminUsersPage";
+import AdminProfilePage from "./pages/system/profile/AdminProfilePage";
+import AdminSecurityLogsPage from "./pages/system/security/AdminSecurityLogsPage";
+import AdminSecurityAlertsPage from "./pages/system/security/AdminSecurityAlertsPage";
 
-/* Account management */
-import AdminProfilePage from "./pages/AdminProfilePage";
-import AdminChangePasswordPage from "./pages/AdminChangePasswordPage";
-import AdminSecurityLogsPage from "./pages/AdminSecurityLogsPage";
-import AdminSecurityAlertsPage from "./pages/AdminSecurityAlertsPage";
+/* =========================
+   MASTERS
+========================= */
+import CategoriesPage from "./pages/masters/categories/CategoriesPage";
+import ProductsPage from "./pages/masters/products/ProductsPage";
+import ProductDetailPage from "./pages/masters/products/ProductDetailPage";
+import AdminSuppliersPage from "./pages/masters/suppliers/AdminSuppliersPage";
+import AdminCustomersPage from "./pages/AdminCustomersPage";
+import AdminCraftsmanPage from "./pages/AdminCraftsmanPage";
+
+/* =========================
+   PROCUREMENT
+========================= */
+import PurchaseOrdersPage from "./pages/procurement/purchase-orders/PurchaseOrdersPage";
+import PurchaseOrderCreatePage from "./pages/procurement/purchase-orders/PurchaseOrderCreatePage";
+import PurchaseOrderDetailPage from "./pages/procurement/purchase-orders/PurchaseOrderDetailPage";
+
+import GRNListPage from "./pages/procurement/grn/GRNListPage";
+import GRNCreatePage from "./pages/procurement/grn/GRNCreatePage";
+import GRNDetailPage from "./pages/procurement/grn/GRNDetailPage";
+
+import AdminSupplierInvoicesPage from "./pages/procurement/supplier-invoices/AdminSupplierInvoicesPage";
+import AdminInvoiceDetailPage from "./pages/procurement/supplier-invoices/AdminInvoiceDetailPage";
+import AdminSupplierPaymentsPage from "./pages/procurement/supplier-payments/AdminSupplierPaymentsPage";
+import AdminSupplierLedgerPage from "./pages/procurement/supplier-ledger/AdminSupplierLedgerPage";
+
+/* =========================
+   INVENTORY
+========================= */
+import AdminDiamondPacketsPage from "./pages/inventory/packets/AdminDiamondPacketsPage";
+import AdminPacketDetailPage from "./pages/inventory/packets/AdminPacketDetailPage";
+import PacketCreatePage from "./pages/inventory/packets/PacketCreatePage";
+import PacketSplitPage from "./pages/inventory/packets/PacketSplitPage";
+import PacketMergePage from "./pages/inventory/packets/PacketMergePage";
+import PacketLabelsPage from "./pages/inventory/packets/PacketLabelsPage";
+
+import AdminStockMovementsPage from "./pages/inventory/movements/AdminStockMovementsPage";
+import AdminWarehouseValuationPage from "./pages/inventory/valuation/AdminWarehouseValuationPage";
+
+/* =========================
+   PRODUCTION
+========================= */
+import AdminWorkOrdersPage from "./pages/production/work-orders/AdminWorkOrdersPage";
+import AdminWorkOrderCreatePage from "./pages/production/work-orders/AdminWorkOrderCreatePage";
+import AdminWorkOrderDetailPage from "./pages/production/work-orders/AdminWorkOrderDetailPage";
+import AdminWorkOrderReceivePage from "./pages/production/work-orders/AdminWorkOrderReceivePage";
+import AdminWorkOrderClosePage from "./pages/production/work-orders/AdminWorkOrderClosePage";
+
+/* =========================
+   FINANCE
+========================= */
+import AdminPaymentsPage from "./pages/production/finance/payments/AdminPaymentsPage";
+import AdminPaymentDetailPage from "./pages/production/finance/payments/AdminPaymentDetailPage";
+import AdminReturnsPage from "./pages/production/finance/returns/AdminReturnsPage";
+import AdminReturnDetailPage from "./pages/production/finance/returns/AdminReturnDetailPage";
+import AdminSettlementPage from "./pages/production/finance/settlement/AdminSettlementPage";
+import AdminTaxRulesPage from "./pages/production/finance/tax/AdminTaxRulesPage";
+
+/* =========================
+   SALES
+========================= */
+import AdminOrdersPage from "./pages/sales/orders/AdminOrdersPage";
+import AdminOrderDetailPage from "./pages/sales/orders/AdminOrderDetailPage";
+import AdminPromoCodesPage from "./pages/sales/promos/AdminPromoCodesPage";
+
+/* =========================
+   LOGISTICS
+========================= */
+import ExportsPage from "./pages/logistics/exports/ExportsPage";
+import ExportHistoryPage from "./pages/logistics/exports/ExportHistoryPage";
+import AdminShippingMethodsPage from "./pages/logistics/shipping/AdminShippingMethodsPage";
+import AdminShippingRulesPage from "./pages/logistics/shipping/AdminShippingRulesPage";
+
+/* =========================
+   MISC
+========================= */
+import PrintCenterPage from "./pages/misc/PrintCenterPage";
+
+/* ===================================================== */
 
 const App: React.FC = () => {
   return (
     <Routes>
-
-      {/* ---------------------------
-            PUBLIC ROUTES
-      ---------------------------- */}
+      {/* ================= PUBLIC ================= */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/return/request" element={<ReturnRequestPage />} />
       <Route path="/return/confirmation" element={<ReturnConfirmationPage />} />
       <Route path="/account/returns" element={<AccountReturnsPage />} />
 
-      {/* ---------------------------
-            ADMIN ROUTES
-      ---------------------------- */}
+      {/* ================= ADMIN ================= */}
       <Route
-        path="/"
+        path="/admin"
         element={
           <ProtectedRoute>
             <AdminLayout />
@@ -94,64 +133,83 @@ const App: React.FC = () => {
       >
         <Route index element={<DashboardHome />} />
 
-        {/* CRM */}
+        {/* Reports / CRM */}
+        <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
         <Route path="leads" element={<LeadsPage />} />
         <Route path="notifications" element={<NotificationsAdminPage />} />
-        <Route path="customers" element={<AdminCustomersPage />} />
-        <Route path="users" element={<AdminUsersPage />} />
 
-        {/* Profile */}
-        <Route path="profile" element={<AdminProfilePage />} />
-        <Route path="security/change-password" element={<AdminChangePasswordPage />} />
-        <Route path="security/logins" element={<AdminSecurityLogsPage />} />
-        <Route path="security/alerts" element={<AdminSecurityAlertsPage />} />
-
-        {/* Catalog */}
+        {/* Masters */}
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="products/:slug" element={<ProductDetailPage />} />
+        <Route path="suppliers" element={<AdminSuppliersPage />} />
+        <Route path="customers" element={<AdminCustomersPage />} />
+        <Route path="craftsmen" element={<AdminCraftsmanPage />} />
 
-        {/* Orders */}
-        <Route path="orders" element={<AdminOrdersPage />} />
-        <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+        {/* Procurement */}
+        <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
+        <Route path="purchase-orders/create" element={<PurchaseOrderCreatePage />} />
+        <Route path="purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
 
-        {/* Payments */}
+        <Route path="grn" element={<GRNListPage />} />
+        <Route path="grn/create" element={<GRNCreatePage />} />
+        <Route path="grn/:id" element={<GRNDetailPage />} />
+
+        <Route path="supplier-invoices/:id" element={<AdminInvoiceDetailPage />} />
+        <Route path="suppliers/:id/invoices" element={<AdminSupplierInvoicesPage />} />
+        <Route path="suppliers/:id/payments" element={<AdminSupplierPaymentsPage />} />
+        <Route path="suppliers/:id/ledger" element={<AdminSupplierLedgerPage />} />
+
+        {/* Inventory */}
+        <Route path="inventory/packets" element={<AdminDiamondPacketsPage />} />
+        <Route path="inventory/packets/create" element={<PacketCreatePage />} />
+        <Route path="inventory/packets/:id" element={<AdminPacketDetailPage />} />
+        <Route path="inventory/packets/:id/split" element={<PacketSplitPage />} />
+        <Route path="inventory/packets/:id/merge" element={<PacketMergePage />} />
+        <Route path="inventory/labels" element={<PacketLabelsPage />} />
+        <Route path="inventory/movements" element={<AdminStockMovementsPage />} />
+        <Route path="inventory/valuation" element={<AdminWarehouseValuationPage />} />
+
+        {/* Production */}
+        <Route path="work-orders" element={<AdminWorkOrdersPage />} />
+        <Route path="work-orders/create" element={<AdminWorkOrderCreatePage />} />
+        <Route path="work-orders/:id" element={<AdminWorkOrderDetailPage />} />
+        <Route path="work-orders/:id/receive" element={<AdminWorkOrderReceivePage />} />
+        <Route path="work-orders/:id/close" element={<AdminWorkOrderClosePage />} />
+
+        {/* Finance */}
         <Route path="payments" element={<AdminPaymentsPage />} />
         <Route path="payments/:id" element={<AdminPaymentDetailPage />} />
-
-        {/* Invoices */}
-        <Route path="invoices" element={<AdminInvoicesPage />} />
-        <Route path="invoices/:id" element={<AdminInvoiceDetailPage />} />
-
-        {/* Returns */}
         <Route path="returns" element={<AdminReturnsPage />} />
         <Route path="returns/:id" element={<AdminReturnDetailPage />} />
-
-        {/* Settlements */}
         <Route path="settlements" element={<AdminSettlementPage />} />
-
-        {/* Marketing */}
-        <Route path="marketing/promos" element={<AdminPromoCodesPage />} />
-
-        {/* Settings */}
         <Route path="settings/tax-rules" element={<AdminTaxRulesPage />} />
+
+        {/* Sales */}
+        <Route path="orders" element={<AdminOrdersPage />} />
+        <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+        <Route path="promos" element={<AdminPromoCodesPage />} />
+
+        {/* Logistics */}
+        <Route path="exports" element={<ExportsPage />} />
+        <Route path="exports/history" element={<ExportHistoryPage />} />
         <Route path="settings/shipping-methods" element={<AdminShippingMethodsPage />} />
         <Route path="settings/shipping-rules" element={<AdminShippingRulesPage />} />
 
-        {/* Analytics */}
-        <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
+        {/* System */}
+        <Route path="users" element={<AdminUsersPage />} />
+        <Route path="profile" element={<AdminProfilePage />} />
+        <Route path="security/logins" element={<AdminSecurityLogsPage />} />
+        <Route path="security/alerts" element={<AdminSecurityAlertsPage />} />
 
-        {/* Exports */}
-        <Route path="exports" element={<ExportsPage />} />
-        <Route path="history" element={<ExportHistoryPage />} />
+        {/* Misc */}
+        <Route path="print" element={<PrintCenterPage />} />
       </Route>
 
-      {/* Fallback */}
-      <Route path="*" element={<LoginPage />} />
-
+      {/* ================= FALLBACK ================= */}
+      <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
   );
 };
 
 export default App;
-  
