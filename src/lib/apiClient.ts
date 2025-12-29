@@ -23,11 +23,8 @@ export const API_BASE_URL = `${API_BASE}`;
    DOMAIN ROUTE PREFIXES (CRITICAL)
 ===================================================== */
 export const API_ROUTES = {
-  /* Core */
   auth: "/auth",
   health: "/health",
-
-  /* Domain routes */
   masters: "/masters",
   crm: "/crm",
   procurement: "/procurement",
@@ -39,8 +36,9 @@ export const API_ROUTES = {
   analytics: "/analytics",
   system: "/system",
   misc: "/misc",
-  events: "/api/system/events"
+  events: "/system/events" // ✅ FIXED
 } as const;
+
 
 
 /* =====================================================
@@ -131,8 +129,10 @@ export async function apiFetch<T = any>(
 
   const isForm = opts.body instanceof FormData;
 
-  if (!isForm && opts.method && opts.method !== "GET") {
-    if (!headers["Content-Type"]) {
+ const method = (opts.method || "GET").toUpperCase();
+
+if (!isForm && method !== "GET") {
+ {
       headers["Content-Type"] = "application/json";
     }
     if (opts.body && typeof opts.body !== "string") {
@@ -152,7 +152,14 @@ export async function apiFetch<T = any>(
 
     if (isAuthEndpoint || opts.__retry) {
       clearAuth();
-      if (typeof window !== "undefined") window.location.href = "/login";
+      if (typeof window !== "undefined") {
+        if (!window.location.pathname.startsWith("/login")) {
+          window.location.replace("/login");
+        }
+      }
+
+}
+  ;
       throw new Error("Session expired");
     }
 
@@ -183,7 +190,11 @@ export async function apiFetch<T = any>(
   }
 
   if (!res.ok) {
-    throw new Error(data?.error || `API error (${res.status})`);
+    throw {
+    status: res.status,
+    error: data?.error || "api_error",
+    message: data?.message || null,
+    };
   }
 
   return data as T;
