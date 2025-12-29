@@ -9,18 +9,16 @@ export interface ApiResponse<T = any> {
 }
 
 /* =====================================================
-   API BASE + VERSION
+   API BASE
 ===================================================== */
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
   "https://apiminalgems.exotech.co.in/api";
 
- // keep here for v1 → v2 migration later
-
-export const API_BASE_URL = `${API_BASE}`;
+export const API_BASE_URL = API_BASE;
 
 /* =====================================================
-   DOMAIN ROUTE PREFIXES (CRITICAL)
+   DOMAIN ROUTES
 ===================================================== */
 export const API_ROUTES = {
   auth: "/auth",
@@ -36,10 +34,8 @@ export const API_ROUTES = {
   analytics: "/analytics",
   system: "/system",
   misc: "/misc",
-  events: "/system/events" // ✅ FIXED
+  events: "/system/events",
 } as const;
-
-
 
 /* =====================================================
    TOKEN HELPERS
@@ -77,20 +73,14 @@ async function refreshAccessToken(): Promise<string | null> {
       headers: { "Content-Type": "application/json" },
     });
 
-    if (res.status === 401 || res.status === 403) {
+    if (!res.ok) {
       waiting.forEach((fn) => fn(null));
       waiting = [];
       return null;
     }
 
-    let data: any = null;
-    try {
-      data = await res.json();
-    } catch {
-      data = null;
-    }
-
-    if (res.ok && data?.token) {
+    const data = await res.json();
+    if (data?.token) {
       setToken(data.token);
       waiting.forEach((fn) => fn(data.token));
       waiting = [];
@@ -120,21 +110,17 @@ export async function apiFetch<T = any>(
     ? path
     : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const token = getToken();
-
   const opts: RequestInit & { __retry?: boolean } = { ...options };
   const headers: HeadersInit = { ...(opts.headers || {}) };
 
+  const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
+  const method = (opts.method || "GET").toUpperCase();
   const isForm = opts.body instanceof FormData;
 
- const method = (opts.method || "GET").toUpperCase();
-
-if (!isForm && method !== "GET") {
- {
-      headers["Content-Type"] = "application/json";
-    }
+  if (!isForm && method !== "GET") {
+    headers["Content-Type"] = "application/json";
     if (opts.body && typeof opts.body !== "string") {
       opts.body = JSON.stringify(opts.body);
     }
@@ -152,21 +138,16 @@ if (!isForm && method !== "GET") {
 
     if (isAuthEndpoint || opts.__retry) {
       clearAuth();
-      if (typeof window !== "undefined") {
-        if (!window.location.pathname.startsWith("/login")) {
-          window.location.replace("/login");
-        }
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.replace("/login");
       }
-
-}
-  ;
       throw new Error("Session expired");
     }
 
     const newToken = await refreshAccessToken();
     if (!newToken) {
       clearAuth();
-      if (typeof window !== "undefined") window.location.href = "/login";
+      window.location.replace("/login");
       throw new Error("Session expired");
     }
 
@@ -191,9 +172,9 @@ if (!isForm && method !== "GET") {
 
   if (!res.ok) {
     throw {
-    status: res.status,
-    error: data?.error || "api_error",
-    message: data?.message || null,
+      status: res.status,
+      error: data?.error || "api_error",
+      message: data?.message || null,
     };
   }
 
@@ -201,26 +182,22 @@ if (!isForm && method !== "GET") {
 }
 
 /* =====================================================
-   HTTP HELPERS (USE THESE EVERYWHERE)
+   HTTP HELPERS
 ===================================================== */
 export const api = {
   get: <T = any>(path: string) => apiFetch<T>(path, { method: "GET" }),
-
   post: <T = any>(path: string, body?: any) =>
     apiFetch<T>(path, { method: "POST", body }),
-
   put: <T = any>(path: string, body?: any) =>
     apiFetch<T>(path, { method: "PUT", body }),
-
   patch: <T = any>(path: string, body?: any) =>
     apiFetch<T>(path, { method: "PATCH", body }),
-
   delete: <T = any>(path: string) =>
     apiFetch<T>(path, { method: "DELETE" }),
 };
 
 /* =====================================================
-   RAW FETCH (PDF / CSV / STREAMS)
+   RAW FETCH
 ===================================================== */
 export async function apiFetchRaw(
   path: string,
@@ -230,8 +207,8 @@ export async function apiFetchRaw(
     ? path
     : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const token = getToken();
   const headers: HeadersInit = { ...(options.headers || {}) };
+  const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   return fetch(url, { ...options, headers, credentials: "include" });
