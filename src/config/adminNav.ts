@@ -98,19 +98,21 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     ],
   },
 
-  /* =========================
-     SALES
-  ========================= */
-  {
-    title: "Sales",
-    items: [
-      { label: "Orders", path: "/admin/orders", icon: ShoppingBag },
-      { label: "Invoices", path: "/admin/invoices", icon: FileText },
-      { label: "Payments", path: "/admin/payments", icon: CreditCard },
-      { label: "Returns", path: "/admin/returns", icon: Receipt },
-      { label: "Settlements", path: "/admin/settlements", icon: ClipboardList },
-    ],
-  },
+ /* =========================
+   SALES
+========================= */
+{
+  title: "Sales",
+  items: [
+    { label: "Orders", path: "/admin/orders", icon: ShoppingBag },
+    { label: "Sales Items", path: "/admin/sales/items", icon: Receipt }, // ✅ NEW
+    { label: "Invoices", path: "/admin/invoices", icon: FileText },
+    { label: "Payments", path: "/admin/payments", icon: CreditCard },
+    { label: "Returns", path: "/admin/returns", icon: Receipt },
+    { label: "Settlements", path: "/admin/settlements", icon: ClipboardList },
+  ],
+},
+
 
   /* =========================
      LOGISTICS & EXPORTS

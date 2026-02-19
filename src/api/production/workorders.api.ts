@@ -1,3 +1,4 @@
+// src/api/production/workorders.api.ts
 import { apiFetch, API_ROUTES } from "@/lib/apiClient";
 
 /* =========================================================
@@ -72,8 +73,34 @@ export const startWorkOrder = (id: string) =>
 export const completeWorkOrder = (id: string) =>
   transitionWorkOrder(id, "complete");
 
-export const receiveWorkOrder = (id: string, payload: any) =>
-  transitionWorkOrder(id, "receive", payload);
+export const receiveWorkOrder = (
+  id: string,
+  payload: { finished_items: any[] }
+) =>
+  apiFetch(`/production/work-orders/${id}/transition`, {
+    method: "POST",
+    body: JSON.stringify({
+      event: "receive",
+      payload,
+    }),
+  });
 
-export const closeWorkOrder = (id: string, payload: any = {}) =>
-  transitionWorkOrder(id, "close", payload);
+
+
+export const closeWorkOrder = (
+  id: string,
+  payload: { note?: string } = {}
+) =>
+  apiFetch(
+    `${BASE}/${encodeURIComponent(id)}/close`,
+    { method: "POST", body: payload }
+  );
+
+  export const getWorkOrderCost = (workOrderId: string) => {
+  if (!workOrderId) throw new Error("work_order_id_required");
+
+  return apiFetch(
+    `${BASE}/${encodeURIComponent(workOrderId)}/cost`
+  );
+};
+
