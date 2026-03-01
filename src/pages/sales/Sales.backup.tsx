@@ -76,20 +76,6 @@ const Sales: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Hybrid mode states
-  const [useManualProduct, setUseManualProduct] = useState(false);
-  const [useManualCustomer, setUseManualCustomer] = useState(false);
-  const [useManualCraftsman, setUseManualCraftsman] = useState(false);
-
-  const [selectedProductId, setSelectedProductId] = useState("");
-  const [manualProductName, setManualProductName] = useState("");
-
-  const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [manualCustomerName, setManualCustomerName] = useState("");
-
-  const [selectedCraftsmanId, setSelectedCraftsmanId] = useState("");
-  const [manualCraftsmanName, setManualCraftsmanName] = useState("");
-
   const loadSales = useCallback(async () => {
     try {
       setLoading(true);
@@ -150,21 +136,8 @@ const Sales: React.FC = () => {
     const formData = new FormData(e.currentTarget);
 
     const payload = new FormData();
-    const number = formData.get("number") as string;
-    const item = formData.get("item") as string;
-
-    if (!number?.trim()) {
-      toast.error("Number is required");
-      return;
-    }
-
-    if (!item?.trim()) {
-      toast.error("Item is required");
-      return;
-    }
-
-    payload.append("number", number);
-    payload.append("item", item);
+    payload.append("number", formData.get("number") as string);
+    payload.append("item", formData.get("item") as string);
     payload.append("diamond_pcs", formData.get("diamond_pcs") as string || "0");
     payload.append("diamond_carat", formData.get("diamond_carat") as string || "0");
     payload.append("rate", formData.get("rate") as string || "0");
@@ -172,44 +145,14 @@ const Sales: React.FC = () => {
     payload.append("gold_price", formData.get("gold_price") as string || "0");
     payload.append("labour_charge", formData.get("labour_charge") as string || "0");
 
-    // HYBRID: Product (ID takes precedence)
-    if (selectedProductId) {
-      payload.append("product_id", selectedProductId);
-    }
+    const productId = formData.get("product_id");
+    if (productId) payload.append("product_id", productId as string);
 
-    // HYBRID: Customer (ID takes precedence)
-    if (useManualCustomer) {
-      if (!manualCustomerName.trim()) {
-        toast.error("Customer name is required");
-        return;
-      }
-      payload.append("customer_name", manualCustomerName.trim());
-    } else {
-      if (!selectedCustomerId) {
-        toast.error("Please select a customer");
-        return;
-      }
-      payload.append("customer_id", selectedCustomerId);
-      const customer = customers.find(c => c.id === selectedCustomerId);
-      if (customer) payload.append("customer_name", customer.name);
-    }
+    const customerId = formData.get("customer_id");
+    if (customerId) payload.append("customer_id", customerId as string);
 
-    // HYBRID: Craftsman (ID takes precedence)
-    if (useManualCraftsman) {
-      if (!manualCraftsmanName.trim()) {
-        toast.error("Craftsman name is required");
-        return;
-      }
-      payload.append("craftman", manualCraftsmanName.trim());
-    } else {
-      if (!selectedCraftsmanId) {
-        toast.error("Please select a craftsman");
-        return;
-      }
-      payload.append("craftsman_id", selectedCraftsmanId);
-      const craftsman = craftsmen.find(c => c.id === selectedCraftsmanId);
-      if (craftsman) payload.append("craftman", craftsman.name);
-    }
+    const craftsmanId = formData.get("craftsman_id");
+    if (craftsmanId) payload.append("craftsman_id", craftsmanId as string);
 
     const imageFile = formData.get("product_image") as File;
     if (imageFile && imageFile.size > 0) {
@@ -222,7 +165,6 @@ const Sales: React.FC = () => {
       toast.success("Sale created successfully");
       setShowCreateModal(false);
       setImagePreview(null);
-      resetForm();
       loadSales();
     } catch (error: any) {
       toast.error(error.message || "Creation failed");
@@ -236,21 +178,8 @@ const Sales: React.FC = () => {
     const formData = new FormData(e.currentTarget);
     const payload = new FormData();
     
-    const number = formData.get("number") as string;
-    const item = formData.get("item") as string;
-
-    if (!number?.trim()) {
-      toast.error("Number is required");
-      return;
-    }
-
-    if (!item?.trim()) {
-      toast.error("Item is required");
-      return;
-    }
-
-    payload.append("number", number);
-    payload.append("item", item);
+    payload.append("number", formData.get("number") as string);
+    payload.append("item", formData.get("item") as string);
     payload.append("diamond_pcs", formData.get("diamond_pcs") as string || "0");
     payload.append("diamond_carat", formData.get("diamond_carat") as string || "0");
     payload.append("rate", formData.get("rate") as string || "0");
@@ -258,46 +187,14 @@ const Sales: React.FC = () => {
     payload.append("gold_price", formData.get("gold_price") as string || "0");
     payload.append("labour_charge", formData.get("labour_charge") as string || "0");
 
-    // HYBRID: Product
-    if (selectedProductId) {
-      payload.append("product_id", selectedProductId);
-    }
+    const productId = formData.get("product_id");
+    if (productId) payload.append("product_id", productId as string);
 
-    // HYBRID: Customer
-    if (useManualCustomer) {
-      if (!manualCustomerName.trim()) {
-        toast.error("Customer name is required");
-        return;
-      }
-      payload.append("customer_name", manualCustomerName.trim());
-      payload.append("customer_id", ""); // Clear ID
-    } else {
-      if (!selectedCustomerId) {
-        toast.error("Please select a customer");
-        return;
-      }
-      payload.append("customer_id", selectedCustomerId);
-      const customer = customers.find(c => c.id === selectedCustomerId);
-      if (customer) payload.append("customer_name", customer.name);
-    }
+    const customerId = formData.get("customer_id");
+    if (customerId) payload.append("customer_id", customerId as string);
 
-    // HYBRID: Craftsman
-    if (useManualCraftsman) {
-      if (!manualCraftsmanName.trim()) {
-        toast.error("Craftsman name is required");
-        return;
-      }
-      payload.append("craftman", manualCraftsmanName.trim());
-      payload.append("craftsman_id", ""); // Clear ID
-    } else {
-      if (!selectedCraftsmanId) {
-        toast.error("Please select a craftsman");
-        return;
-      }
-      payload.append("craftsman_id", selectedCraftsmanId);
-      const craftsman = craftsmen.find(c => c.id === selectedCraftsmanId);
-      if (craftsman) payload.append("craftman", craftsman.name);
-    }
+    const craftsmanId = formData.get("craftsman_id");
+    if (craftsmanId) payload.append("craftsman_id", craftsmanId as string);
 
     const imageFile = formData.get("product_image") as File;
     if (imageFile && imageFile.size > 0) {
@@ -310,7 +207,6 @@ const Sales: React.FC = () => {
       toast.success("Sale updated successfully");
       setEditingSale(null);
       setImagePreview(null);
-      resetForm();
       loadSales();
     } catch (error: any) {
       toast.error(error.message || "Update failed");
@@ -369,56 +265,6 @@ const Sales: React.FC = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const resetForm = () => {
-    setUseManualProduct(false);
-    setUseManualCustomer(false);
-    setUseManualCraftsman(false);
-    setSelectedProductId("");
-    setManualProductName("");
-    setSelectedCustomerId("");
-    setManualCustomerName("");
-    setSelectedCraftsmanId("");
-    setManualCraftsmanName("");
-  };
-
-  const openEditModal = (sale: Sale) => {
-    setEditingSale(sale);
-    setImagePreview(sale.product_image_url ? `${API_BASE}${sale.product_image_url}` : null);
-    
-    // Set product
-    if (sale.product_id) {
-      setUseManualProduct(false);
-      setSelectedProductId(sale.product_id);
-      setManualProductName("");
-    } else {
-      setUseManualProduct(true);
-      setSelectedProductId("");
-      setManualProductName(sale.item || "");
-    }
-
-    // Set customer
-    if (sale.customer_id) {
-      setUseManualCustomer(false);
-      setSelectedCustomerId(sale.customer_id);
-      setManualCustomerName("");
-    } else {
-      setUseManualCustomer(true);
-      setSelectedCustomerId("");
-      setManualCustomerName(sale.customer_name || "");
-    }
-
-    // Set craftsman
-    if (sale.craftsman_id) {
-      setUseManualCraftsman(false);
-      setSelectedCraftsmanId(sale.craftsman_id);
-      setManualCraftsmanName("");
-    } else {
-      setUseManualCraftsman(true);
-      setSelectedCraftsmanId("");
-      setManualCraftsmanName(sale.craftsman_name || "");
     }
   };
 
@@ -527,7 +373,10 @@ const Sales: React.FC = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => openEditModal(sale)}
+                          onClick={() => {
+                            setEditingSale(sale);
+                            setImagePreview(sale.product_image_url ? `${API_BASE}${sale.product_image_url}` : null);
+                          }}
                           className="p-1 text-blue-600 hover:bg-blue-50 rounded"
                         >
                           <Edit size={18} />
@@ -586,7 +435,6 @@ const Sales: React.FC = () => {
                   setShowCreateModal(false);
                   setEditingSale(null);
                   setImagePreview(null);
-                  resetForm();
                 }}
                 className="p-1 hover:bg-gray-100 rounded"
               >
@@ -640,132 +488,53 @@ const Sales: React.FC = () => {
 
                 {/* Product */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium text-gray-700">Product</label>
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={useManualProduct}
-                        onChange={(e) => {
-                          setUseManualProduct(e.target.checked);
-                          setSelectedProductId("");
-                          setManualProductName("");
-                        }}
-                        className="rounded"
-                      />
-                      Manual entry
-                    </label>
-                  </div>
-                  {!useManualProduct ? (
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select Product</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={manualProductName}
-                      onChange={(e) => setManualProductName(e.target.value)}
-                      placeholder="Enter product name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  )}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                  <select
+                    name="product_id"
+                    defaultValue={editingSale?.product_id || ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Product</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Customer */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium text-gray-700">Customer *</label>
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={useManualCustomer}
-                        onChange={(e) => {
-                          setUseManualCustomer(e.target.checked);
-                          setSelectedCustomerId("");
-                          setManualCustomerName("");
-                        }}
-                        className="rounded"
-                      />
-                      Manual entry
-                    </label>
-                  </div>
-                  {!useManualCustomer ? (
-                    <select
-                      value={selectedCustomerId}
-                      onChange={(e) => setSelectedCustomerId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    >
-                      <option value="">Select Customer</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={manualCustomerName}
-                      onChange={(e) => setManualCustomerName(e.target.value)}
-                      placeholder="Enter customer name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  )}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                  <select
+                    name="customer_id"
+                    defaultValue={editingSale?.customer_id || ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Customer</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Craftsman */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium text-gray-700">Craftsman *</label>
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={useManualCraftsman}
-                        onChange={(e) => {
-                          setUseManualCraftsman(e.target.checked);
-                          setSelectedCraftsmanId("");
-                          setManualCraftsmanName("");
-                        }}
-                        className="rounded"
-                      />
-                      Manual entry
-                    </label>
-                  </div>
-                  {!useManualCraftsman ? (
-                    <select
-                      value={selectedCraftsmanId}
-                      onChange={(e) => setSelectedCraftsmanId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    >
-                      <option value="">Select Craftsman</option>
-                      {craftsmen.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={manualCraftsmanName}
-                      onChange={(e) => setManualCraftsmanName(e.target.value)}
-                      placeholder="Enter craftsman name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  )}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Craftsman</label>
+                  <select
+                    name="craftsman_id"
+                    defaultValue={editingSale?.craftsman_id || ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Craftsman</option>
+                    {craftsmen.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Diamond Pcs */}
@@ -849,7 +618,6 @@ const Sales: React.FC = () => {
                     setShowCreateModal(false);
                     setEditingSale(null);
                     setImagePreview(null);
-                    resetForm();
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                 >
