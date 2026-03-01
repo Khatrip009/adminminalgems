@@ -50,25 +50,40 @@ export type SalesItemPayload = {
 
   customer_id?: string | null;
   customer_name?: string | null;
+
+  product_id?: string | null;
+  product_image?: File | null;
 };
 
 export type SalesItemUpdatePayload = {
+  number?: string;
   item?: string;
+  diamond_pcs?: number;
+  diamond_carat?: number;
   rate?: number;
+  gold?: number;
   gold_price?: number;
   labour_charge?: number;
   selling_price?: number;
+  product_id?: string | null;
+  customer_id?: string | null;
+  craftsman_id?: string | null;
+  product_image?: File | null;
 };
 
 /* =========================================================
    CREATE SALES ITEM
 ========================================================= */
 
-export const createSalesItem = (payload: SalesItemPayload) =>
-  apiFetch(BASE, {
+export const createSalesItem = (payload: SalesItemPayload | FormData) => {
+  const isFormData = payload instanceof FormData;
+  
+  return apiFetch(BASE, {
     method: "POST",
     body: payload,
+    headers: isFormData ? {} : undefined, // Let browser set Content-Type for FormData
   });
+};
 
 /* =========================================================
    LIST / SEARCH SALES ITEMS
@@ -103,13 +118,16 @@ export const getSalesItem = (id: string) => {
 
 export const updateSalesItem = (
   id: string,
-  payload: SalesItemUpdatePayload
+  payload: SalesItemUpdatePayload | FormData
 ) => {
   if (!id) throw new Error("sales_item_id_required");
+  
+  const isFormData = payload instanceof FormData;
 
   return apiFetch(`${BASE}/${encodeURIComponent(id)}`, {
     method: "PUT",
     body: payload,
+    headers: isFormData ? {} : undefined,
   });
 };
 
@@ -132,7 +150,7 @@ export const deleteSalesItem = (id: string) => {
 export const exportSalesItemsCSV = () =>
   apiFetch(`${BASE}/export/csv`, {
     method: "GET",
-    responseType: "blob", // IMPORTANT for file download
+    responseType: "blob",
   });
 
 /* =========================================================

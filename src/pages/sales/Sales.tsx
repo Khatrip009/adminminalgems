@@ -2,57 +2,39 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "react-hot-toast";
 import {
-  Plus,
-  Trash2,
-  Download,
-  FileText,
-  Edit,
-  Upload,
-  Search,
-  X,
-  Save,
+  Plus, Trash2, Download, FileText, Edit, Search, X,
+  Image as ImageIcon, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 import {
-  listSalesItems,
-  createSalesItem,
-  updateSalesItem,
-  deleteSalesItem,
-  exportSalesItemsCSV,
-  exportSalesItemsPDF,
-  importSalesItemsCSV,
+  listSalesItems, createSalesItem, updateSalesItem,
+  deleteSalesItem, exportSalesItemsCSV, exportSalesItemsPDF,
 } from "@/api/sales/sales.api";
 
 import { fetchProductsAdmin, type Product } from "@/api/masters/products.api";
 import { listCustomers } from "@/api/masters/customers.api";
 import { listCraftsmen } from "@/api/masters/craftsmen.api";
 
-/* -------------------------------------------------------------------------
-   TYPES
-------------------------------------------------------------------------- */
-
 interface Sale {
   id: number;
   number: string;
   item: string;
-
+  product_image_url?: string | null;
   diamond_pcs: number | string;
   diamond_carat: number | string;
   rate: number | string;
   total_diamond_price: number | string;
-
   gold: number | string;
   gold_price: number | string;
-  diamond_packet?: string | null;
-
   labour_charge: number | string;
   total_making_cost: number | string;
-
   selling_price: number | string;
-
+  product_id?: string | null;
+  product_title?: string | null;
+  craftsman_id?: string | null;
   craftsman_name?: string | null;
+  customer_id?: string | null;
   customer_name?: string | null;
-
   created_at: string;
   updated_at: string;
 }
@@ -62,61 +44,49 @@ interface Option {
   name: string;
 }
 
-/* -------------------------------------------------------------------------
-   HELPERS
-------------------------------------------------------------------------- */
-
 const formatMoney = (value: any): string => {
   if (value === null || value === undefined || value === "") return "—";
   const num = Number(value);
-  return isNaN(num) ? "—" : num.toFixed(2);
+  return isNaN(num) ? "—" : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const formatDate = (dateStr: string): string => {
   return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+    day: "2-digit", month: "short", year: "numeric",
   });
 };
 
-/* -------------------------------------------------------------------------
-   MAIN COMPONENT
-------------------------------------------------------------------------- */
+const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "https://apiminalgems.exotech.co.in/api";
 
 const Sales: React.FC = () => {
   const [items, setItems] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const limit = 20;
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
 
-  // Master data
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Option[]>([]);
   const [craftsmen, setCraftsmen] = useState<Option[]>([]);
 
-  // Refs for file input
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  /* -----------------------------------------------------------------------
-     DATA LOADING
-  ----------------------------------------------------------------------- */
 
   const loadSales = useCallback(async () => {
     try {
       setLoading(true);
       const response = await listSalesItems({
         q: searchTerm,
-        limit: 20,
-        offset: (page - 1) * 20,
+        limit,
+        offset: (page - 1) * limit,
       });
       if (!response.ok) throw new Error(response.error || "Failed to load");
-      setItems(response.results);
-      setHasMore(response.results.length === 20);
+      setItems(response.results || []);
+      setTotalCount(response.count || 0);
     } catch (error) {
       toast.error("Could not load sales items");
       console.error(error);
@@ -128,14 +98,13 @@ const Sales: React.FC = () => {
   const loadMasters = async () => {
     try {
       const [productsRes, customersRes, craftsmenRes] = await Promise.all([
-        fetchProductsAdmin({ limit: 100 }),
-        listCustomers({ limit: 100 }),
-        listCraftsmen({ limit: 100 }),
+        fetchProductsAdmin({ limit: 500 }),
+        listCustomers({ limit: 500 }),
+        listCraftsmen({ limit: 500 }),
       ]);
 
       setProducts(productsRes.products || []);
 
-      // Safely extract customers – handle both { results } and direct array
       const customersList = customersRes.results || customersRes.data?.results || customersRes;
       setCustomers(
         Array.isArray(customersList)
@@ -162,67 +131,32 @@ const Sales: React.FC = () => {
     loadMasters();
   }, []);
 
-  /* -----------------------------------------------------------------------
-     CALCULATIONS
-  ----------------------------------------------------------------------- */
-
-  const calculateTotals = (form: HTMLFormElement) => {
-    const diamondCarat = parseFloat(form.diamond_carat?.value) || 0;
-    const rate = parseFloat(form.rate?.value) || 0;
-    const goldPrice = parseFloat(form.gold_price?.value) || 0;
-    const labour = parseFloat(form.labour_charge?.value) || 0;
-
-    const diamondTotal = diamondCarat * rate;
-    const makingTotal = goldPrice + labour;
-    const selling = diamondTotal + makingTotal;
-
-    if (form.total_diamond_price)
-      form.total_diamond_price.value = diamondTotal.toFixed(2);
-    if (form.total_making_cost)
-      form.total_making_cost.value = makingTotal.toFixed(2);
-    if (form.selling_price) form.selling_price.value = selling.toFixed(2);
-  };
-
-  /* -----------------------------------------------------------------------
-     CREATE
-  ----------------------------------------------------------------------- */
-
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
+    const formData = new FormData(e.currentTarget);
 
-    calculateTotals(form); // ensure latest totals
+    const payload = new FormData();
+    payload.append("number", formData.get("number") as string);
+    payload.append("item", formData.get("item") as string);
+    payload.append("diamond_pcs", formData.get("diamond_pcs") as string || "0");
+    payload.append("diamond_carat", formData.get("diamond_carat") as string || "0");
+    payload.append("rate", formData.get("rate") as string || "0");
+    payload.append("gold", formData.get("gold") as string || "0");
+    payload.append("gold_price", formData.get("gold_price") as string || "0");
+    payload.append("labour_charge", formData.get("labour_charge") as string || "0");
 
-    const payload: any = {
-      number: formData.get("number") as string,
-      item: formData.get("item") || formData.get("product_select"),
-      diamond_pcs: Number(formData.get("diamond_pcs") || 0),
-      diamond_carat: Number(formData.get("diamond_carat") || 0),
-      rate: Number(formData.get("rate") || 0),
-      gold: Number(formData.get("gold") || 0),
-      gold_price: Number(formData.get("gold_price") || 0),
-      diamond_packet: formData.get("diamond_packet") || null,
-      labour_charge: Number(formData.get("labour_charge") || 0),
-      selling_price: Number(formData.get("selling_price") || 0),
-    };
+    const productId = formData.get("product_id");
+    if (productId) payload.append("product_id", productId as string);
 
-    // Customer
-    const customerId = formData.get("customer_select");
-    const customerManual = formData.get("customer_manual");
-    if (customerId) {
-      payload.customer_id = customerId;
-    } else if (customerManual) {
-      payload.customer_name = customerManual;
-    }
+    const customerId = formData.get("customer_id");
+    if (customerId) payload.append("customer_id", customerId as string);
 
-    // Craftsman
-    const craftsmanId = formData.get("craftsman_select");
-    const craftsmanManual = formData.get("craftsman_manual");
-    if (craftsmanId) {
-      payload.craftsman_id = craftsmanId;
-    } else if (craftsmanManual) {
-      payload.craftsman_name = craftsmanManual;
+    const craftsmanId = formData.get("craftsman_id");
+    if (craftsmanId) payload.append("craftsman_id", craftsmanId as string);
+
+    const imageFile = formData.get("product_image") as File;
+    if (imageFile && imageFile.size > 0) {
+      payload.append("product_image", imageFile);
     }
 
     try {
@@ -230,305 +164,230 @@ const Sales: React.FC = () => {
       if (!response.ok) throw new Error(response.error);
       toast.success("Sale created successfully");
       setShowCreateModal(false);
+      setImagePreview(null);
       loadSales();
     } catch (error: any) {
       toast.error(error.message || "Creation failed");
     }
   };
 
-  /* -----------------------------------------------------------------------
-     UPDATE
-  ----------------------------------------------------------------------- */
-
   const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingSale) return;
 
-    const form = e.currentTarget;
-    calculateTotals(form);
+    const formData = new FormData(e.currentTarget);
+    const payload = new FormData();
+    
+    payload.append("number", formData.get("number") as string);
+    payload.append("item", formData.get("item") as string);
+    payload.append("diamond_pcs", formData.get("diamond_pcs") as string || "0");
+    payload.append("diamond_carat", formData.get("diamond_carat") as string || "0");
+    payload.append("rate", formData.get("rate") as string || "0");
+    payload.append("gold", formData.get("gold") as string || "0");
+    payload.append("gold_price", formData.get("gold_price") as string || "0");
+    payload.append("labour_charge", formData.get("labour_charge") as string || "0");
 
-    const formData = new FormData(form);
+    const productId = formData.get("product_id");
+    if (productId) payload.append("product_id", productId as string);
 
-    const payload: any = {
-      number: formData.get("number") as string,
-      item: formData.get("item") as string,
-      diamond_pcs: Number(formData.get("diamond_pcs") || 0),
-      diamond_carat: Number(formData.get("diamond_carat") || 0),
-      rate: Number(formData.get("rate") || 0),
-      gold: Number(formData.get("gold") || 0),
-      gold_price: Number(formData.get("gold_price") || 0),
-      diamond_packet: formData.get("diamond_packet") || null,
-      labour_charge: Number(formData.get("labour_charge") || 0),
-      selling_price: Number(formData.get("selling_price") || 0),
-    };
+    const customerId = formData.get("customer_id");
+    if (customerId) payload.append("customer_id", customerId as string);
 
-    // Customer
-    const customerId = formData.get("customer_select");
-    const customerManual = formData.get("customer_manual");
-    if (customerId) {
-      payload.customer_id = customerId;
-      delete payload.customer_name;
-    } else if (customerManual) {
-      payload.customer_name = customerManual;
-      delete payload.customer_id;
-    }
+    const craftsmanId = formData.get("craftsman_id");
+    if (craftsmanId) payload.append("craftsman_id", craftsmanId as string);
 
-    // Craftsman
-    const craftsmanId = formData.get("craftsman_select");
-    const craftsmanManual = formData.get("craftsman_manual");
-    if (craftsmanId) {
-      payload.craftsman_id = craftsmanId;
-      delete payload.craftsman_name;
-    } else if (craftsmanManual) {
-      payload.craftsman_name = craftsmanManual;
-      delete payload.craftsman_id;
+    const imageFile = formData.get("product_image") as File;
+    if (imageFile && imageFile.size > 0) {
+      payload.append("product_image", imageFile);
     }
 
     try {
-      await updateSalesItem(editingSale.id.toString(), payload);
-      toast.success("Sale updated");
+      const response = await updateSalesItem(String(editingSale.id), payload);
+      if (!response.ok) throw new Error(response.error);
+      toast.success("Sale updated successfully");
       setEditingSale(null);
+      setImagePreview(null);
       loadSales();
     } catch (error: any) {
       toast.error(error.message || "Update failed");
     }
   };
 
-  /* -----------------------------------------------------------------------
-     DELETE
-  ----------------------------------------------------------------------- */
-
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this sale?")) return;
+    if (!confirm("Delete this sale?")) return;
     try {
-      await deleteSalesItem(id.toString());
+      const response = await deleteSalesItem(String(id));
+      if (!response.ok) throw new Error(response.error);
       toast.success("Sale deleted");
       loadSales();
-    } catch {
-      toast.error("Deletion failed");
+    } catch (error: any) {
+      toast.error(error.message || "Delete failed");
     }
   };
 
-  /* -----------------------------------------------------------------------
-     EXPORT / IMPORT
-  ----------------------------------------------------------------------- */
-
-  const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportCSV = async () => {
+  const handleExportCSV = async () => {
     try {
       const blob = await exportSalesItemsCSV();
-      downloadBlob(blob, "sales-items.csv");
-    } catch {
-      toast.error("CSV export failed");
+      const url = window.URL.createObjectURL(blob as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sales_${Date.now()}.csv`;
+      a.click();
+      toast.success("CSV exported");
+    } catch (error) {
+      toast.error("Export failed");
     }
   };
 
-  const exportPDF = async () => {
+  const handleExportPDF = async () => {
     try {
       const blob = await exportSalesItemsPDF();
-      downloadBlob(blob, "sales-register.pdf");
+      const url = window.URL.createObjectURL(blob as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sales_${Date.now()}.pdf`;
+      a.click();
+      toast.success("PDF exported");
     } catch (error) {
-      console.error(error);
-      toast.error("PDF export failed");
+      toast.error("Export failed");
     }
   };
 
-  const importCSV = async (file: File) => {
-    try {
-      await importSalesItemsCSV(file);
-      toast.success("CSV imported successfully");
-      loadSales();
-    } catch {
-      toast.error("CSV import failed");
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("Image must be less than 10MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  /* -----------------------------------------------------------------------
-     RENDER
-  ----------------------------------------------------------------------- */
+  const totalPages = Math.ceil(totalCount / limit);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-800">Sales Register</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Sales Management</h1>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={exportCSV}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            <Download size={16} /> CSV
-          </button>
-          <button
-            onClick={exportPDF}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            <FileText size={16} /> PDF
-          </button>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-            <Upload size={16} /> Import
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              hidden
-              onChange={(e) => e.target.files?.[0] && importCSV(e.target.files[0])}
-            />
-          </label>
-          <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
           >
-            <Plus size={16} /> New Sale
+            <Plus size={18} />
+            <span className="hidden sm:inline">Add Sale</span>
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            <FileText size={18} />
+            <span className="hidden sm:inline">CSV</span>
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+          >
+            <Download size={18} />
+            <span className="hidden sm:inline">PDF</span>
           </button>
         </div>
       </div>
 
       {/* Search */}
-      <div className="mb-6 flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
+            placeholder="Search by number or item..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && loadSales()}
-            placeholder="Search by invoice or item..."
-            className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        {(searchTerm || page > 1) && (
-          <button
-            onClick={() => {
-              setSearchTerm("");
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
               setPage(1);
             }}
-            className="text-sm text-gray-600 hover:text-gray-900"
-          >
-            Clear filters
-          </button>
-        )}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b">
               <tr>
-                {[
-                  "Invoice",
-                  "Item",
-                  "Dia Pcs",
-                  "Dia Ct",
-                  "Rate",
-                  "Dia Amt",
-                  "Gold Wt",
-                  "Gold Amt",
-                  "Packet",
-                  "Labour",
-                  "Craftsman",
-                  "Making",
-                  "Selling",
-                  "Customer",
-                  "Date",
-                  "",
-                ].map((heading) => (
-                  <th
-                    key={heading}
-                    className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600"
-                  >
-                    {heading}
-                  </th>
-                ))}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Number</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Craftsman</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Selling Price</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {loading && items.length === 0 ? (
+            <tbody className="divide-y divide-gray-200">
+              {loading ? (
                 <tr>
-                  <td colSpan={16} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     Loading...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     No sales found
                   </td>
                 </tr>
               ) : (
                 items.map((sale) => (
                   <tr key={sale.id} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-4 py-2 font-medium text-gray-900">
-                      {sale.number}
+                    <td className="px-4 py-3">
+                      {sale.product_image_url ? (
+                        <img
+                          src={`${API_BASE}${sale.product_image_url}`}
+                          alt={sale.item}
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                          <ImageIcon size={20} className="text-gray-400" />
+                        </div>
+                      )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.item}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.diamond_pcs}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.diamond_carat}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {formatMoney(sale.rate)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {formatMoney(sale.total_diamond_price)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.gold}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {formatMoney(sale.gold_price)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.diamond_packet || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {formatMoney(sale.labour_charge)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.craftsman_name || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {formatMoney(sale.total_making_cost)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 font-semibold text-gray-900">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{sale.number}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{sale.item}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{sale.customer_name || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{sale.craftsman_name || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
                       {formatMoney(sale.selling_price)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {sale.customer_name || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                      {formatDate(sale.created_at)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-right">
-                      <button
-                        onClick={() => setEditingSale(sale)}
-                        className="mr-2 rounded p-1 text-blue-600 transition hover:bg-blue-50"
-                        title="Edit"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(sale.id)}
-                        className="rounded p-1 text-red-600 transition hover:bg-red-50"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                    <td className="px-4 py-3 text-sm text-gray-700">{formatDate(sale.created_at)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingSale(sale);
+                            setImagePreview(sale.product_image_url ? `${API_BASE}${sale.product_image_url}` : null);
+                          }}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(sale.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -537,419 +396,244 @@ const Sales: React.FC = () => {
           </table>
         </div>
 
-        {hasMore && (
-          <div className="border-t border-gray-200 px-4 py-3">
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              Load more...
-            </button>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Page {page} of {totalPages} ({totalCount} total)
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Create Modal */}
-      {showCreateModal && (
-        <Modal title="Create New Sale" onClose={() => setShowCreateModal(false)}>
-          <Form
-            onSubmit={handleCreate}
-            products={products}
-            customers={customers}
-            craftsmen={craftsmen}
-            initialData={null}
-            calculateTotals={calculateTotals}
-            isEdit={false}
-            onClose={() => setShowCreateModal(false)}
-          />
-        </Modal>
+      {/* Create/Edit Modal */}
+      {(showCreateModal || editingSale) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-bold">
+                {editingSale ? "Edit Sale" : "Create Sale"}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setEditingSale(null);
+                  setImagePreview(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={editingSale ? handleUpdate : handleCreate} className="p-4 space-y-4">
+              {/* Image Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+                <div className="flex items-center gap-4">
+                  {imagePreview && (
+                    <img src={imagePreview} alt="Preview" className="w-24 h-24 object-cover rounded" />
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    name="product_image"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Number *</label>
+                  <input
+                    type="text"
+                    name="number"
+                    defaultValue={editingSale?.number || ""}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Item */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Item *</label>
+                  <input
+                    type="text"
+                    name="item"
+                    defaultValue={editingSale?.item || ""}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Product */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                  <select
+                    name="product_id"
+                    defaultValue={editingSale?.product_id || ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Product</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Customer */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                  <select
+                    name="customer_id"
+                    defaultValue={editingSale?.customer_id || ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Customer</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Craftsman */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Craftsman</label>
+                  <select
+                    name="craftsman_id"
+                    defaultValue={editingSale?.craftsman_id || ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Craftsman</option>
+                    {craftsmen.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Diamond Pcs */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Diamond Pcs</label>
+                  <input
+                    type="number"
+                    name="diamond_pcs"
+                    step="1"
+                    defaultValue={editingSale?.diamond_pcs || 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Diamond Carat */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Diamond Carat</label>
+                  <input
+                    type="number"
+                    name="diamond_carat"
+                    step="0.01"
+                    defaultValue={editingSale?.diamond_carat || 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Rate */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+                  <input
+                    type="number"
+                    name="rate"
+                    step="0.01"
+                    defaultValue={editingSale?.rate || 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Gold */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gold (grams)</label>
+                  <input
+                    type="number"
+                    name="gold"
+                    step="0.01"
+                    defaultValue={editingSale?.gold || 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Gold Price */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gold Price</label>
+                  <input
+                    type="number"
+                    name="gold_price"
+                    step="0.01"
+                    defaultValue={editingSale?.gold_price || 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Labour Charge */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Labour Charge</label>
+                  <input
+                    type="number"
+                    name="labour_charge"
+                    step="0.01"
+                    defaultValue={editingSale?.labour_charge || 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingSale(null);
+                    setImagePreview(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  {editingSale ? "Update" : "Create"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
-
-      {/* Edit Modal */}
-      {editingSale && (
-        <Modal title="Edit Sale" onClose={() => setEditingSale(null)}>
-          <Form
-            key={editingSale.id}
-            onSubmit={handleUpdate}
-            products={products}
-            customers={customers}
-            craftsmen={craftsmen}
-            initialData={editingSale}
-            calculateTotals={calculateTotals}
-            isEdit={true}
-            onClose={() => setEditingSale(null)}
-          />
-        </Modal>
-      )}
-    </div>
-  );
-};
-
-/* -------------------------------------------------------------------------
-   FORM COMPONENT
-------------------------------------------------------------------------- */
-
-interface FormProps {
-  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
-  products: Product[];
-  customers: Option[];
-  craftsmen: Option[];
-  initialData: Sale | null;
-  calculateTotals: (form: HTMLFormElement) => void;
-  isEdit: boolean;
-  onClose: () => void;
-}
-
-const Form: React.FC<FormProps> = ({
-  onSubmit,
-  products,
-  customers,
-  craftsmen,
-  initialData,
-  calculateTotals,
-  isEdit,
-  onClose,
-}) => {
-  const formRef = useRef<HTMLFormElement>(null);
-
-  const handleInputChange = () => {
-    if (formRef.current) calculateTotals(formRef.current);
-  };
-
-  return (
-    <form ref={formRef} onSubmit={onSubmit} className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 max-h-[60vh] overflow-y-auto pr-2">
-        {/* Invoice Number */}
-        <div className="col-span-2">
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Invoice Number *
-          </label>
-          <input
-            type="text"
-            name="number"
-            required
-            defaultValue={initialData?.number}
-            readOnly={isEdit}
-            className={`w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-              isEdit ? "bg-gray-100" : ""
-            }`}
-          />
-        </div>
-
-        {/* Product selection + manual item */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Product (select)
-          </label>
-          <select
-            name="product_select"
-            defaultValue={products.find((p) => p.title === initialData?.item)?.id || ""}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          >
-            <option value="">— Select product —</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.title}>
-                {p.title}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Or enter manually
-          </label>
-          <input
-            type="text"
-            name="item"
-            defaultValue={initialData?.item}
-            placeholder="Item name"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Diamond details */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Diamond Pcs
-          </label>
-          <input
-            type="number"
-            name="diamond_pcs"
-            step="1"
-            defaultValue={initialData?.diamond_pcs}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Diamond Carat
-          </label>
-          <input
-            type="number"
-            name="diamond_carat"
-            step="0.01"
-            defaultValue={initialData?.diamond_carat}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Rate (per carat)
-          </label>
-          <input
-            type="number"
-            name="rate"
-            step="0.01"
-            defaultValue={initialData?.rate}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Calculated diamond total */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Diamond Total
-          </label>
-          <input
-            type="text"
-            name="total_diamond_price"
-            readOnly
-            defaultValue={initialData?.total_diamond_price}
-            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm text-gray-600"
-          />
-        </div>
-
-        {/* Gold */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Gold Weight
-          </label>
-          <input
-            type="number"
-            name="gold"
-            step="0.01"
-            defaultValue={initialData?.gold}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Gold Amount
-          </label>
-          <input
-            type="number"
-            name="gold_price"
-            step="0.01"
-            defaultValue={initialData?.gold_price}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Diamond packet */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Diamond Packet
-          </label>
-          <input
-            type="text"
-            name="diamond_packet"
-            defaultValue={initialData?.diamond_packet || ""}
-            placeholder="Packet ref"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Labour */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Labour Charge
-          </label>
-          <input
-            type="number"
-            name="labour_charge"
-            step="0.01"
-            defaultValue={initialData?.labour_charge}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Calculated making cost */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Making Cost
-          </label>
-          <input
-            type="text"
-            name="total_making_cost"
-            readOnly
-            defaultValue={initialData?.total_making_cost}
-            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm text-gray-600"
-          />
-        </div>
-
-        {/* Selling price */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Selling Price *
-          </label>
-          <input
-            type="number"
-            name="selling_price"
-            step="0.01"
-            required
-            defaultValue={initialData?.selling_price}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Customer */}
-        <div className="col-span-2 grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Customer (select)
-            </label>
-            <select
-              name="customer_select"
-              defaultValue={
-                customers.find((c) => c.name === initialData?.customer_name)?.id || ""
-              }
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">— Select customer —</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Or enter manually
-            </label>
-            <input
-              type="text"
-              name="customer_manual"
-              defaultValue={
-                !customers.find((c) => c.name === initialData?.customer_name)
-                  ? initialData?.customer_name || ""
-                  : ""
-              }
-              placeholder="Customer name"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Craftsman */}
-        <div className="col-span-2 grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Craftsman (select)
-            </label>
-            <select
-              name="craftsman_select"
-              defaultValue={
-                craftsmen.find((c) => c.name === initialData?.craftsman_name)?.id || ""
-              }
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">— Select craftsman —</option>
-              {craftsmen.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Or enter manually
-            </label>
-            <input
-              type="text"
-              name="craftsman_manual"
-              defaultValue={
-                !craftsmen.find((c) => c.name === initialData?.craftsman_name)
-                  ? initialData?.craftsman_name || ""
-                  : ""
-              }
-              placeholder="Craftsman name"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-3 pt-4">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-        >
-          <Save size={16} /> {isEdit ? "Update Sale" : "Create Sale"}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-/* -------------------------------------------------------------------------
-   MODAL COMPONENT
-------------------------------------------------------------------------- */
-
-const Modal: React.FC<{
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}> = ({ title, onClose, children }) => {
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-2xl rounded-xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <img src="/minal_gems_logo.svg" alt="Minal Gems" className="h-8 w-auto" />
-            <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="px-6 py-4">{children}</div>
-      </div>
     </div>
   );
 };

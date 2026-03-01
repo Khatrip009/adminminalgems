@@ -104,13 +104,13 @@ async function refreshAccessToken(): Promise<string | null> {
 ===================================================== */
 export async function apiFetch<T = any>(
   path: string,
-  options: RequestInit & { __retry?: boolean } = {}
+  options: RequestInit & { __retry?: boolean; responseType?: 'json' | 'blob' } = {}
 ): Promise<T> {
   const url = path.startsWith("http")
     ? path
     : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const opts: RequestInit & { __retry?: boolean } = { ...options };
+  const opts: RequestInit & { __retry?: boolean; responseType?: 'json' | 'blob' } = { ...options };
   const headers: HeadersInit = { ...(opts.headers || {}) };
 
   const token = getToken();
@@ -161,6 +161,25 @@ export async function apiFetch<T = any>(
   }
 
   /* ---------- NORMAL FLOW ---------- */
+  // Handle blob responses (for file downloads)
+  if (opts.responseType === 'blob') {
+    if (!res.ok) {
+      const text = await res.text();
+      let data: any;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text;
+      }
+      throw {
+        status: res.status,
+        error: data?.error || "api_error",
+        message: data?.message || null,
+      };
+    }
+    return (await res.blob()) as T;
+  }
+
   const text = await res.text();
   let data: any;
 
