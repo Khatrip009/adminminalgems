@@ -2,8 +2,19 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "react-hot-toast";
 import {
-  Plus, Trash2, Download, FileText, Edit, Search, X,
-  Image as ImageIcon, ChevronLeft, ChevronRight,
+  Plus,
+  Trash2,
+  Download,
+  FileText,
+  Edit,
+  Search,
+  X,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Receipt,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 import {
@@ -12,43 +23,50 @@ import {
   updateSalesItem,
   deleteSalesItem,
   exportSalesItemsCSV,
-  exportSalesItemsPDF,
+  exportSalesItemsExcel,
+  exportSalesRegisterPDF,
+  exportSalesInvoicePDF,
 } from "@/api/sales/sales.api";
 
 import { fetchProductsAdmin, type Product } from "@/api/masters/products.api";
 import { listCustomers } from "@/api/masters/customers.api";
 import { listCraftsmen } from "@/api/masters/craftsmen.api";
 
-// ---------- Types ----------
+/* =========================================================
+   TYPES
+========================================================= */
+
+interface Diamond {
+  pcs: number;
+  carat: number;
+  rate: number;
+  amount?: number;
+  type?: string;
+  quality?: string | null;
+}
+
 interface Sale {
   id: number;
   number: string;
   item: string;
   product_image_url?: string | null;
-  diamonds: Array<{
-    pcs: number;
-    carat: number;
-    rate: number;
-    amount?: number;
-    type?: string;
-    quality?: string | null;
-  }>;
-  diamond_pcs: number;       // aggregated (for display)
-  diamond_carat: string;     // aggregated
-  total_diamond_price: string;
-  gold: string;
-  gold_price: string;
-  labour_charge: string;
-  total_making_cost: string;
-  selling_price: string;
+  diamonds: Diamond[];
+  diamond_pcs: number;
+  diamond_carat: number;
+  total_diamond_price: number;
+  gold: number;
+  gold_price: number;
+  labour_charge: number;
+  total_making_cost: number;
+  profit_percent: number;
+  profit_amount: number;
+  selling_price: number;
   product_id?: string | null;
-  product_name?: string | null;
-  craftsman_id?: string | null;
-  craftsman_name?: string | null;
   customer_id?: string | null;
   customer_name?: string | null;
+  craftsman_id?: string | null;
+  craftsman_name?: string | null;
   created_at: string;
-  updated_at: string;
 }
 
 interface Option {
@@ -56,647 +74,598 @@ interface Option {
   name: string;
 }
 
-// ---------- Helpers ----------
-const formatMoney = (value: any): string => {
-  if (value === null || value === undefined || value === "") return "—";
-  const num = Number(value);
-  return isNaN(num) ? "—" : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
+/* =========================================================
+   HELPERS
+========================================================= */
 
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
+const money = (v?: number | string) =>
+  v === null || v === undefined || isNaN(Number(v))
+    ? "—"
+    : `₹${Number(v).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+
+const dateFmt = (d: string) =>
+  new Date(d).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
-};
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "https://apiminalgems.exotech.co.in/api";
+/* =========================================================
+   COMPONENT
+========================================================= */
 
-// ---------- Component ----------
 const Sales: React.FC = () => {
   const [items, setItems] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const limit = 20;
+  const [count, setCount] = useState(0);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Sale | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingSale, setEditingSale] = useState<Sale | null>(null);
-
+  // Master data
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Option[]>([]);
   const [craftsmen, setCraftsmen] = useState<Option[]>([]);
 
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Hybrid mode states
-  const [useManualCustomer, setUseManualCustomer] = useState(false);
-  const [useManualCraftsman, setUseManualCraftsman] = useState(false);
-
+  // Form state
   const [selectedProductId, setSelectedProductId] = useState("");
-  // Note: product name is taken from the "item" field, so no manualProductName needed
+  const [manualItem, setManualItem] = useState("");
+  const [useManualProduct, setUseManualProduct] = useState(false);
 
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [manualCustomerName, setManualCustomerName] = useState("");
+  const [manualCustomer, setManualCustomer] = useState("");
+  const [useManualCustomer, setUseManualCustomer] = useState(false);
 
   const [selectedCraftsmanId, setSelectedCraftsmanId] = useState("");
-  const [manualCraftsmanName, setManualCraftsmanName] = useState("");
+  const [manualCraftsman, setManualCraftsman] = useState("");
+  const [useManualCraftsman, setUseManualCraftsman] = useState(false);
 
-  // Diamond fields (support a single diamond for simplicity – backend accepts array)
-  const [diamondPcs, setDiamondPcs] = useState<number>(0);
-  const [diamondCarat, setDiamondCarat] = useState<number>(0);
-  const [diamondRate, setDiamondRate] = useState<number>(0);
+  // Diamonds
+  const [diamonds, setDiamonds] = useState<Diamond[]>([
+    { pcs: 1, carat: 0, rate: 0, type: "Default", quality: null },
+  ]);
 
-  // ---------- Data fetching ----------
+  // Gold & costs
+  const [gold, setGold] = useState(0);
+  const [goldPrice, setGoldPrice] = useState(0);
+  const [labourCharge, setLabourCharge] = useState(0);
+  const [profitPercent, setProfitPercent] = useState(0);
+  const [profitAmount, setProfitAmount] = useState(0);
+  const [sellingPrice, setSellingPrice] = useState(0);
+
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Calculations
+  const totalDiamondPrice = diamonds.reduce(
+    (sum, d) => sum + (d.carat * d.rate),
+    0
+  );
+  const totalDiamondPcs = diamonds.reduce((sum, d) => sum + d.pcs, 0);
+  const totalDiamondCarat = diamonds.reduce((sum, d) => sum + d.carat, 0);
+  const totalMakingCost = totalDiamondPrice + goldPrice + labourCharge;
+
+  // Update profit amount when percent changes
+  useEffect(() => {
+    const newProfitAmount = (totalMakingCost * profitPercent) / 100;
+    setProfitAmount(newProfitAmount);
+    setSellingPrice(totalMakingCost + newProfitAmount);
+  }, [profitPercent, totalMakingCost]);
+
+  // Update profit percent when amount changes (manual edit)
+  const handleProfitAmountChange = (value: number) => {
+    setProfitAmount(value);
+    if (totalMakingCost > 0) {
+      const newPercent = (value / totalMakingCost) * 100;
+      setProfitPercent(newPercent);
+    }
+    setSellingPrice(totalMakingCost + value);
+  };
+
+  /* =========================================================
+     LOAD DATA
+  ========================================================= */
+
   const loadSales = useCallback(async () => {
     try {
       setLoading(true);
-      // Backend uses "search", "page", "limit"
-      const response = await listSalesItems({
-        search: searchTerm || undefined,
-        page,
-        limit,
-      });
-      if (!response.ok) throw new Error(response.error || "Failed to load");
-      setItems(response.results || []);
-      setTotalCount(response.count || 0);
-    } catch (error) {
-      toast.error("Could not load sales items");
-      console.error(error);
+      const r = await listSalesItems({ search, page, limit });
+      if (!r.ok) throw r;
+      setItems(r.results);
+      setCount(r.count);
+    } catch {
+      toast.error("Failed to load sales");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, page, limit]);
-
-  const loadMasters = async () => {
-    try {
-      const [productsRes, customersRes, craftsmenRes] = await Promise.all([
-        fetchProductsAdmin({ limit: 500 }),
-        listCustomers({ limit: 500 }),
-        listCraftsmen({ limit: 500 }),
-      ]);
-
-      setProducts(productsRes.products || []);
-
-      const customersList = customersRes.results || customersRes.data?.results || customersRes;
-      setCustomers(
-        Array.isArray(customersList)
-          ? customersList.map((c: any) => ({ id: c.id, name: c.name }))
-          : []
-      );
-
-      const craftsmenList = craftsmenRes.results || craftsmenRes.data?.results || craftsmenRes;
-      setCraftsmen(
-        Array.isArray(craftsmenList)
-          ? craftsmenList.map((c: any) => ({ id: c.id, name: c.name }))
-          : []
-      );
-    } catch (error) {
-      toast.error("Failed to load master data");
-    }
-  };
+  }, [search, page]);
 
   useEffect(() => {
     loadSales();
   }, [loadSales]);
 
   useEffect(() => {
-    loadMasters();
+    (async () => {
+      const [p, c, cr] = await Promise.all([
+        fetchProductsAdmin({ limit: 500 }),
+        listCustomers({ limit: 500 }),
+        listCraftsmen({ limit: 500 }),
+      ]);
+      setProducts(p.products || []);
+      setCustomers((c.results || []).map((x: any) => ({ id: x.id, name: x.name })));
+      setCraftsmen((cr.results || []).map((x: any) => ({ id: x.id, name: x.name })));
+    })();
   }, []);
 
-  // ---------- Form handling ----------
+  /* =========================================================
+     FORM HANDLERS
+  ========================================================= */
+
   const resetForm = () => {
-    setUseManualCustomer(false);
-    setUseManualCraftsman(false);
+    setEditing(null);
+    setShowModal(false);
+    setUseManualProduct(false);
     setSelectedProductId("");
+    setManualItem("");
+    setUseManualCustomer(false);
     setSelectedCustomerId("");
-    setManualCustomerName("");
+    setManualCustomer("");
+    setUseManualCraftsman(false);
     setSelectedCraftsmanId("");
-    setManualCraftsmanName("");
-    setDiamondPcs(0);
-    setDiamondCarat(0);
-    setDiamondRate(0);
+    setManualCraftsman("");
+    setDiamonds([{ pcs: 1, carat: 0, rate: 0, type: "Default", quality: null }]);
+    setGold(0);
+    setGoldPrice(0);
+    setLabourCharge(0);
+    setProfitPercent(0);
+    setProfitAmount(0);
+    setSellingPrice(0);
     setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (fileRef.current) fileRef.current.value = "";
   };
 
-  const buildDiamondsArray = () => {
-    // Return an array with one diamond object (or empty if all zeros)
-    if (diamondPcs === 0 && diamondCarat === 0 && diamondRate === 0) return [];
-    return [
-      {
-        pcs: diamondPcs,
-        carat: diamondCarat,
-        rate: diamondRate,
-        type: "Default",        // backend may expect type; adjust if needed
-        quality: null,
-      },
-    ];
+  const openEdit = (sale: Sale) => {
+    setEditing(sale);
+    setSelectedProductId(sale.product_id || "");
+    setManualItem(sale.item);
+    setUseManualProduct(!sale.product_id);
+    setSelectedCustomerId(sale.customer_id || "");
+    setManualCustomer(sale.customer_name || "");
+    setUseManualCustomer(!sale.customer_id);
+    setSelectedCraftsmanId(sale.craftsman_id || "");
+    setManualCraftsman(sale.craftsman_name || "");
+    setUseManualCraftsman(!sale.craftsman_id);
+    setDiamonds(sale.diamonds.length ? sale.diamonds : [{ pcs: 1, carat: 0, rate: 0, type: "Default", quality: null }]);
+    setGold(sale.gold);
+    setGoldPrice(sale.gold_price);
+    setLabourCharge(sale.labour_charge);
+    setProfitPercent(sale.profit_percent);
+    setProfitAmount(sale.profit_amount);
+    setSellingPrice(sale.selling_price);
+    setImagePreview(sale.product_image_url ? `${import.meta.env.VITE_API_BASE_URL}${sale.product_image_url}` : null);
+    setShowModal(true);
   };
 
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+  const buildPayload = (form: HTMLFormElement) => {
+    const fd = new FormData(form);
 
-    const number = formData.get("number") as string;
-    const item = formData.get("item") as string;
-
-    if (!number?.trim()) return toast.error("Number is required");
-    if (!item?.trim()) return toast.error("Item is required");
-
-    const payload = new FormData();
-    payload.append("number", number);
-    payload.append("item", item);
-
-    // Diamonds as JSON array
-    const diamondsArray = buildDiamondsArray();
-    payload.append("diamonds", JSON.stringify(diamondsArray));
-
-    payload.append("gold", formData.get("gold") as string || "0");
-    payload.append("gold_price", formData.get("gold_price") as string || "0");
-    payload.append("labour_charge", formData.get("labour_charge") as string || "0");
-
-    // Product
-    if (selectedProductId) {
-      payload.append("product_id", selectedProductId);
+    // Item
+    if (useManualProduct) {
+      fd.set("item", manualItem);
+      fd.delete("product_id");
+    } else {
+      fd.set("product_id", selectedProductId);
+      // item will be taken from product on backend
+      fd.delete("item");
     }
 
     // Customer
     if (useManualCustomer) {
-      if (!manualCustomerName.trim()) return toast.error("Customer name is required");
-      payload.append("customer_name", manualCustomerName.trim());
+      fd.set("customer_name", manualCustomer);
+      fd.delete("customer_id");
     } else {
-      if (!selectedCustomerId) return toast.error("Please select a customer");
-      payload.append("customer_id", selectedCustomerId);
-      const customer = customers.find(c => c.id === selectedCustomerId);
-      if (customer) payload.append("customer_name", customer.name); // optional
+      fd.set("customer_id", selectedCustomerId);
+      fd.delete("customer_name");
     }
 
     // Craftsman
     if (useManualCraftsman) {
-      if (!manualCraftsmanName.trim()) return toast.error("Craftsman name is required");
-      payload.append("craftman", manualCraftsmanName.trim());
+      fd.set("craftman", manualCraftsman);
+      fd.delete("craftsman_id");
     } else {
-      if (!selectedCraftsmanId) return toast.error("Please select a craftsman");
-      payload.append("craftsman_id", selectedCraftsmanId);
-      const craftsman = craftsmen.find(c => c.id === selectedCraftsmanId);
-      if (craftsman) payload.append("craftman", craftsman.name); // optional
+      fd.set("craftsman_id", selectedCraftsmanId);
+      fd.delete("craftman");
     }
-
-    const imageFile = formData.get("product_image") as File;
-    if (imageFile && imageFile.size > 0) {
-      payload.append("product_image", imageFile);
-    }
-
-    try {
-      const response = await createSalesItem(payload);
-      if (!response.ok) throw new Error(response.error);
-      toast.success("Sale created successfully");
-      setShowCreateModal(false);
-      resetForm();
-      loadSales();
-    } catch (error: any) {
-      toast.error(error.message || "Creation failed");
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!editingSale) return;
-
-    const formData = new FormData(e.currentTarget);
-    const number = formData.get("number") as string;
-    const item = formData.get("item") as string;
-
-    if (!number?.trim()) return toast.error("Number is required");
-    if (!item?.trim()) return toast.error("Item is required");
-
-    const payload = new FormData();
-    payload.append("number", number);
-    payload.append("item", item);
 
     // Diamonds
-    const diamondsArray = buildDiamondsArray();
-    payload.append("diamonds", JSON.stringify(diamondsArray));
+    const diamondsPayload = diamonds.map(d => ({
+      ...d,
+      amount: d.carat * d.rate,
+    }));
+    fd.append("diamonds", JSON.stringify(diamondsPayload));
 
-    payload.append("gold", formData.get("gold") as string || "0");
-    payload.append("gold_price", formData.get("gold_price") as string || "0");
-    payload.append("labour_charge", formData.get("labour_charge") as string || "0");
+    // Costs
+    fd.set("gold", String(gold));
+    fd.set("gold_price", String(goldPrice));
+    fd.set("labour_charge", String(labourCharge));
+    fd.set("profit_percent", String(profitPercent));
+    fd.set("profit_amount", String(profitAmount)); // computed, but backend may recalc
 
-    // Product
-    if (selectedProductId) {
-      payload.append("product_id", selectedProductId);
-    }
+    return fd;
+  };
 
-    // Customer
-    if (useManualCustomer) {
-      if (!manualCustomerName.trim()) return toast.error("Customer name is required");
-      payload.append("customer_name", manualCustomerName.trim());
-      // Ensure no ID is sent
-      payload.append("customer_id", "");
-    } else {
-      if (!selectedCustomerId) return toast.error("Please select a customer");
-      payload.append("customer_id", selectedCustomerId);
-      const customer = customers.find(c => c.id === selectedCustomerId);
-      if (customer) payload.append("customer_name", customer.name);
-    }
-
-    // Craftsman
-    if (useManualCraftsman) {
-      if (!manualCraftsmanName.trim()) return toast.error("Craftsman name is required");
-      payload.append("craftman", manualCraftsmanName.trim());
-      payload.append("craftsman_id", "");
-    } else {
-      if (!selectedCraftsmanId) return toast.error("Please select a craftsman");
-      payload.append("craftsman_id", selectedCraftsmanId);
-      const craftsman = craftsmen.find(c => c.id === selectedCraftsmanId);
-      if (craftsman) payload.append("craftman", craftsman.name);
-    }
-
-    const imageFile = formData.get("product_image") as File;
-    if (imageFile && imageFile.size > 0) {
-      payload.append("product_image", imageFile);
-    }
-
+  const submitCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     try {
-      const response = await updateSalesItem(String(editingSale.id), payload);
-      if (!response.ok) throw new Error(response.error);
-      toast.success("Sale updated successfully");
-      setEditingSale(null);
+      const fd = buildPayload(e.currentTarget);
+      const r = await createSalesItem(fd);
+      if (!r.ok) throw r;
+      toast.success("Sale created");
       resetForm();
       loadSales();
-    } catch (error: any) {
-      toast.error(error.message || "Update failed");
+    } catch {
+      toast.error("Create failed");
+    }
+  };
+
+  const submitUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editing) return;
+    try {
+      const fd = buildPayload(e.currentTarget);
+      const r = await updateSalesItem(String(editing.id), fd);
+      if (!r.ok) throw r;
+      toast.success("Sale updated");
+      resetForm();
+      loadSales();
+    } catch {
+      toast.error("Update failed");
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this sale?")) return;
+    if (!confirm("Are you sure?")) return;
     try {
-      const response = await deleteSalesItem(String(id));
-      if (!response.ok) throw new Error(response.error);
-      toast.success("Sale deleted");
+      const r = await deleteSalesItem(String(id));
+      if (!r.ok) throw r;
+      toast.success("Deleted");
       loadSales();
-    } catch (error: any) {
-      toast.error(error.message || "Delete failed");
+    } catch {
+      toast.error("Delete failed");
     }
   };
 
-  // ---------- Exports ----------
-  const handleExportCSV = async () => {
-    try {
-      const blob = await exportSalesItemsCSV();
-      const url = window.URL.createObjectURL(blob as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sales_${Date.now()}.csv`;
-      a.click();
-      toast.success("CSV exported");
-    } catch (error) {
-      toast.error("Export failed");
-    }
+  const addDiamondRow = () => {
+    setDiamonds([...diamonds, { pcs: 1, carat: 0, rate: 0, type: "Default", quality: null }]);
   };
 
-  const handleExportPDF = async () => {
-    try {
-      const blob = await exportSalesItemsPDF();
-      const url = window.URL.createObjectURL(blob as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sales_${Date.now()}.pdf`;
-      a.click();
-      toast.success("PDF exported");
-    } catch (error) {
-      toast.error("Export failed");
-    }
+  const removeDiamondRow = (idx: number) => {
+    if (diamonds.length === 1) return;
+    setDiamonds(diamonds.filter((_, i) => i !== idx));
   };
 
-  // ---------- Image preview ----------
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("Image must be less than 10MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
+  const updateDiamond = (idx: number, field: keyof Diamond, value: number | string) => {
+    const newDiamonds = [...diamonds];
+    (newDiamonds[idx] as any)[field] = value;
+    setDiamonds(newDiamonds);
   };
 
-  // ---------- Edit modal prefill ----------
-  const openEditModal = (sale: Sale) => {
-    setEditingSale(sale);
-    setImagePreview(sale.product_image_url ? `${API_BASE}${sale.product_image_url}` : null);
-
-    // Product
-    if (sale.product_id) {
-      setSelectedProductId(sale.product_id);
-    } else {
-      setSelectedProductId("");
-    }
-
-    // Customer
-    if (sale.customer_id) {
-      setUseManualCustomer(false);
-      setSelectedCustomerId(sale.customer_id);
-      setManualCustomerName("");
-    } else {
-      setUseManualCustomer(true);
-      setSelectedCustomerId("");
-      setManualCustomerName(sale.customer_name || "");
-    }
-
-    // Craftsman
-    if (sale.craftsman_id) {
-      setUseManualCraftsman(false);
-      setSelectedCraftsmanId(sale.craftsman_id);
-      setManualCraftsmanName("");
-    } else {
-      setUseManualCraftsman(true);
-      setSelectedCraftsmanId("");
-      setManualCraftsmanName(sale.craftsman_name || "");
-    }
-
-    // Diamonds – take first diamond if exists
-    if (sale.diamonds && sale.diamonds.length > 0) {
-      const d = sale.diamonds[0];
-      setDiamondPcs(d.pcs || 0);
-      setDiamondCarat(d.carat || 0);
-      setDiamondRate(d.rate || 0);
-    } else {
-      setDiamondPcs(0);
-      setDiamondCarat(0);
-      setDiamondRate(0);
-    }
+  const toggleRow = (id: number) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
-  const totalPages = Math.ceil(totalCount / limit);
+  /* =========================================================
+     EXPORTS
+  ========================================================= */
+
+  const download = (blob: Blob, name: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
+  const totalPages = Math.ceil(count / limit);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6 font-sans">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
-            Sales Management
-          </h1>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-sm hover:shadow"
-            >
-              <Plus size={18} />
-              <span className="hidden sm:inline">Add Sale</span>
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 shadow-sm hover:shadow"
-            >
-              <FileText size={18} />
-              <span className="hidden sm:inline">CSV</span>
-            </button>
-            <button
-              onClick={handleExportPDF}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-sm hover:shadow"
-            >
-              <Download size={18} />
-              <span className="hidden sm:inline">PDF</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search by number or item..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-            />
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Number</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Craftsman</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                      Loading...
-                    </td>
-                  </tr>
-                ) : items.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                      No sales found
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((sale) => (
-                    <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        {sale.product_image_url ? (
-                          <img
-                            src={`${API_BASE}${sale.product_image_url}`}
-                            alt={sale.item}
-                            className="w-12 h-12 object-cover rounded-md shadow-sm"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center">
-                            <ImageIcon size={20} className="text-gray-400" />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{sale.number}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{sale.item}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{sale.customer_name || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{sale.craftsman_name || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
-                        {formatMoney(sale.selling_price)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{formatDate(sale.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openEditModal(sale)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                            title="Edit"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(sale.id)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-4 py-3 border-t flex items-center justify-between bg-gray-50">
-              <div className="text-sm text-gray-700">
-                Page {page} of {totalPages} ({totalCount} total)
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="p-2 border rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="p-2 border rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-          )}
+    <div className="p-6 bg-gray-50 min-h-screen font-sans">
+      {/* HEADER */}
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Sales</h1>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition shadow"
+          >
+            <Plus size={18} /> Add Sale
+          </button>
+          <button
+            onClick={async () => download(await exportSalesItemsCSV(), "sales.csv")}
+            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition shadow"
+          >
+            <Download size={18} /> CSV
+          </button>
+          <button
+            onClick={async () => download(await exportSalesItemsExcel(), "sales.xlsx")}
+            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition shadow"
+          >
+            <Download size={18} /> Excel
+          </button>
+          <button
+            onClick={async () => download(await exportSalesRegisterPDF(), "sales-register.pdf")}
+            className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition shadow"
+          >
+            <FileText size={18} /> Register PDF
+          </button>
         </div>
       </div>
 
-      {/* Create/Edit Modal */}
-      {(showCreateModal || editingSale) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl my-8">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-bold">
-                {editingSale ? "Edit Sale" : "Create Sale"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setEditingSale(null);
-                  resetForm();
-                }}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      {/* SEARCH */}
+      <div className="mb-4 flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search by number, item, customer..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
 
-            <form onSubmit={editingSale ? handleUpdate : handleCreate} className="p-4 space-y-4">
-              {/* Image Upload */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
-                <div className="flex items-center gap-4">
-                  {imagePreview && (
-                    <img src={imagePreview} alt="Preview" className="w-24 h-24 object-cover rounded-md shadow-sm" />
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    name="product_image"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition"
-                  />
+      {/* TABLE */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
+            <tr>
+              <th className="p-3 w-8"></th>
+              <th className="p-3 text-left">Invoice No</th>
+              <th className="p-3 text-left">Item</th>
+              <th className="p-3 text-left">Customer</th>
+              <th className="p-3 text-right">Selling Price</th>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-center">Invoice</th>
+              <th className="p-3 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {items.map((sale) => (
+              <React.Fragment key={sale.id}>
+                <tr className="hover:bg-gray-50 transition">
+                  <td className="p-3">
+                    <button
+                      onClick={() => toggleRow(sale.id)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      {expandedRows.has(sale.id) ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                  </td>
+                  <td className="p-3 font-medium">{sale.number}</td>
+                  <td className="p-3">{sale.item}</td>
+                  <td className="p-3">{sale.customer_name}</td>
+                  <td className="p-3 text-right font-semibold">{money(sale.selling_price)}</td>
+                  <td className="p-3">{dateFmt(sale.created_at)}</td>
+                  <td className="p-3 text-center">
+                    <button
+                      onClick={async () =>
+                        download(await exportSalesInvoicePDF(String(sale.id)), `invoice-${sale.number}.pdf`)
+                      }
+                      className="text-blue-600 hover:text-blue-800"
+                      title="Download Invoice"
+                    >
+                      <Receipt size={18} />
+                    </button>
+                  </td>
+                  <td className="p-3 text-center">
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => openEdit(sale)}
+                        className="text-amber-600 hover:text-amber-800"
+                        title="Edit"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(sale.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Delete"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {expandedRows.has(sale.id) && (
+                  <tr className="bg-gray-50">
+                    <td colSpan={8} className="p-4">
+                      <div className="border rounded-lg bg-white p-4">
+                        <h4 className="font-semibold mb-2 text-gray-700">Diamond Details</h4>
+                        {sale.diamonds.length === 0 ? (
+                          <p className="text-gray-500 italic">No diamonds</p>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="p-2 text-left">Pcs</th>
+                                <th className="p-2 text-left">Carat</th>
+                                <th className="p-2 text-left">Rate (₹)</th>
+                                <th className="p-2 text-left">Amount (₹)</th>
+                                <th className="p-2 text-left">Type</th>
+                                <th className="p-2 text-left">Quality</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sale.diamonds.map((d, idx) => (
+                                <tr key={idx} className="border-t">
+                                  <td className="p-2">{d.pcs}</td>
+                                  <td className="p-2">{d.carat}</td>
+                                  <td className="p-2">{money(d.rate)}</td>
+                                  <td className="p-2">{money(d.amount)}</td>
+                                  <td className="p-2">{d.type || "Default"}</td>
+                                  <td className="p-2">{d.quality || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+        {items.length === 0 && !loading && (
+          <div className="text-center py-8 text-gray-500">No sales found</div>
+        )}
+      </div>
+
+      {/* PAGINATION */}
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-4">
+          <span className="text-sm text-gray-600">
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+              className="p-2 border rounded hover:bg-gray-100 disabled:opacity-50"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage(p => p + 1)}
+              className="p-2 border rounded hover:bg-gray-100 disabled:opacity-50"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <form onSubmit={editing ? submitUpdate : submitCreate}>
+              {/* Modal Header with Logo */}
+              <div className="flex justify-between items-center p-6 border-b">
+                <div className="flex items-center gap-3">
+                  <img src="/logo_minalgems.png" alt="Minal Gems" className="h-10 w-auto" />
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {editing ? "Edit Sale" : "New Sale"}
+                  </h2>
                 </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Number *</label>
-                  <input
-                    type="text"
-                    name="number"
-                    defaultValue={editingSale?.number || ""}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-
-                {/* Item */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Item *</label>
-                  <input
-                    type="text"
-                    name="item"
-                    defaultValue={editingSale?.item || ""}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-
-                {/* Product Dropdown */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product (optional)</label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  >
-                    <option value="">Select Product</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
+              {/* Modal Body */}
+              <div className="p-6 space-y-6">
+                {/* Product / Item */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Product / Item *</label>
+                  <div className="flex gap-4 items-center">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="productType"
+                        checked={!useManualProduct}
+                        onChange={() => setUseManualProduct(false)}
+                      />
+                      <span>Select Product</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="productType"
+                        checked={useManualProduct}
+                        onChange={() => setUseManualProduct(true)}
+                      />
+                      <span>Manual Entry</span>
+                    </label>
+                  </div>
+                  {!useManualProduct ? (
+                    <select
+                      value={selectedProductId}
+                      onChange={(e) => setSelectedProductId(e.target.value)}
+                      required
+                      className="w-full p-2 border rounded"
+                    >
+                      <option value="">Select a product</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title} ({p.style_code})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={manualItem}
+                      onChange={(e) => setManualItem(e.target.value)}
+                      placeholder="Enter item name"
+                      required
+                      className="w-full p-2 border rounded"
+                    />
+                  )}
                 </div>
 
                 {/* Customer */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium text-gray-700">Customer *</label>
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Customer *</label>
+                  <div className="flex gap-4 items-center">
+                    <label className="flex items-center gap-2">
                       <input
-                        type="checkbox"
-                        checked={useManualCustomer}
-                        onChange={(e) => {
-                          setUseManualCustomer(e.target.checked);
-                          setSelectedCustomerId("");
-                          setManualCustomerName("");
-                        }}
-                        className="rounded"
+                        type="radio"
+                        checked={!useManualCustomer}
+                        onChange={() => setUseManualCustomer(false)}
                       />
-                      Manual entry
+                      <span>Select Customer</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={useManualCustomer}
+                        onChange={() => setUseManualCustomer(true)}
+                      />
+                      <span>Manual Entry</span>
                     </label>
                   </div>
                   {!useManualCustomer ? (
                     <select
                       value={selectedCustomerId}
                       onChange={(e) => setSelectedCustomerId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                      required={!useManualCustomer}
+                      required
+                      className="w-full p-2 border rounded"
                     >
-                      <option value="">Select Customer</option>
+                      <option value="">Select a customer</option>
                       {customers.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
@@ -706,41 +675,44 @@ const Sales: React.FC = () => {
                   ) : (
                     <input
                       type="text"
-                      value={manualCustomerName}
-                      onChange={(e) => setManualCustomerName(e.target.value)}
+                      value={manualCustomer}
+                      onChange={(e) => setManualCustomer(e.target.value)}
                       placeholder="Enter customer name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                      required={useManualCustomer}
+                      required
+                      className="w-full p-2 border rounded"
                     />
                   )}
                 </div>
 
                 {/* Craftsman */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium text-gray-700">Craftsman *</label>
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Craftsman *</label>
+                  <div className="flex gap-4 items-center">
+                    <label className="flex items-center gap-2">
                       <input
-                        type="checkbox"
-                        checked={useManualCraftsman}
-                        onChange={(e) => {
-                          setUseManualCraftsman(e.target.checked);
-                          setSelectedCraftsmanId("");
-                          setManualCraftsmanName("");
-                        }}
-                        className="rounded"
+                        type="radio"
+                        checked={!useManualCraftsman}
+                        onChange={() => setUseManualCraftsman(false)}
                       />
-                      Manual entry
+                      <span>Select Craftsman</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={useManualCraftsman}
+                        onChange={() => setUseManualCraftsman(true)}
+                      />
+                      <span>Manual Entry</span>
                     </label>
                   </div>
                   {!useManualCraftsman ? (
                     <select
                       value={selectedCraftsmanId}
                       onChange={(e) => setSelectedCraftsmanId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                      required={!useManualCraftsman}
+                      required
+                      className="w-full p-2 border rounded"
                     >
-                      <option value="">Select Craftsman</option>
+                      <option value="">Select a craftsman</option>
                       {craftsmen.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
@@ -750,115 +722,226 @@ const Sales: React.FC = () => {
                   ) : (
                     <input
                       type="text"
-                      value={manualCraftsmanName}
-                      onChange={(e) => setManualCraftsmanName(e.target.value)}
+                      value={manualCraftsman}
+                      onChange={(e) => setManualCraftsman(e.target.value)}
                       placeholder="Enter craftsman name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                      required={useManualCraftsman}
+                      required
+                      className="w-full p-2 border rounded"
                     />
                   )}
                 </div>
 
-                {/* Diamond Fields */}
+                {/* Diamonds Table */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Diamond Pcs</label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={diamondPcs}
-                    onChange={(e) => setDiamondPcs(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Diamond Carat</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={diamondCarat}
-                    onChange={(e) => setDiamondCarat(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate (per carat)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={diamondRate}
-                    onChange={(e) => setDiamondRate(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Diamonds</label>
+                  <div className="border rounded overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="p-2">Pcs</th>
+                          <th className="p-2">Carat</th>
+                          <th className="p-2">Rate (₹)</th>
+                          <th className="p-2">Amount (₹)</th>
+                          <th className="p-2">Type</th>
+                          <th className="p-2">Quality</th>
+                          <th className="p-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diamonds.map((d, idx) => (
+                          <tr key={idx} className="border-t">
+                            <td className="p-1">
+                              <input
+                                type="number"
+                                min="1"
+                                value={d.pcs}
+                                onChange={(e) => updateDiamond(idx, "pcs", parseInt(e.target.value) || 0)}
+                                className="w-16 p-1 border rounded"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={d.carat}
+                                onChange={(e) => updateDiamond(idx, "carat", parseFloat(e.target.value) || 0)}
+                                className="w-20 p-1 border rounded"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <input
+                                type="number"
+                                step="100"
+                                min="0"
+                                value={d.rate}
+                                onChange={(e) => updateDiamond(idx, "rate", parseFloat(e.target.value) || 0)}
+                                className="w-24 p-1 border rounded"
+                              />
+                            </td>
+                            <td className="p-1 font-medium">
+                              {money(d.carat * d.rate)}
+                            </td>
+                            <td className="p-1">
+                              <input
+                                type="text"
+                                value={d.type || ""}
+                                onChange={(e) => updateDiamond(idx, "type", e.target.value)}
+                                className="w-20 p-1 border rounded"
+                                placeholder="Type"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <input
+                                type="text"
+                                value={d.quality || ""}
+                                onChange={(e) => updateDiamond(idx, "quality", e.target.value)}
+                                className="w-20 p-1 border rounded"
+                                placeholder="Quality"
+                              />
+                            </td>
+                            <td className="p-1">
+                              <button
+                                type="button"
+                                onClick={() => removeDiamondRow(idx)}
+                                className="text-red-500 hover:text-red-700"
+                                disabled={diamonds.length === 1}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addDiamondRow}
+                    className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <Plus size={16} /> Add Diamond
+                  </button>
                 </div>
 
-                {/* Gold */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Gold (grams)</label>
-                  <input
-                    type="number"
-                    name="gold"
-                    step="0.01"
-                    defaultValue={editingSale?.gold || 0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
+                {/* Gold & Labour */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Gold (g)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={gold}
+                      onChange={(e) => setGold(parseFloat(e.target.value) || 0)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Gold Price (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={goldPrice}
+                      onChange={(e) => setGoldPrice(parseFloat(e.target.value) || 0)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Labour Charge (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={labourCharge}
+                      onChange={(e) => setLabourCharge(parseFloat(e.target.value) || 0)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Gold Price (₹)</label>
-                  <input
-                    type="number"
-                    name="gold_price"
-                    step="0.01"
-                    defaultValue={editingSale?.gold_price || 0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
+
+                {/* Profit & Selling */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Profit %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={profitPercent}
+                      onChange={(e) => setProfitPercent(parseFloat(e.target.value) || 0)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Profit Amount (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={profitAmount}
+                      onChange={(e) => handleProfitAmountChange(parseFloat(e.target.value) || 0)}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Selling Price (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={sellingPrice}
+                      readOnly
+                      className="w-full p-2 border rounded bg-gray-100"
+                    />
+                  </div>
                 </div>
+
+                {/* Image Upload */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Labour Charge (₹)</label>
-                  <input
-                    type="number"
-                    name="labour_charge"
-                    step="0.01"
-                    defaultValue={editingSale?.labour_charge || 0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                  />
+                  <label className="block text-sm font-medium text-gray-700">Product Image</label>
+                  <div className="flex items-center gap-4 mt-1">
+                    {imagePreview && (
+                      <img src={imagePreview} alt="Preview" className="h-20 w-20 object-cover rounded border" />
+                    )}
+                    <input
+                      type="file"
+                      ref={fileRef}
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setImagePreview(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="flex-1 p-2 border rounded"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t">
+              {/* Modal Footer */}
+              <div className="flex justify-end gap-2 p-6 border-t">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setEditingSale(null);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={resetForm}
+                  className="px-4 py-2 border rounded hover:bg-gray-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  {editingSale ? "Update" : "Create"}
+                  {editing ? "Update" : "Create"} Sale
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* Tailwind animation class */}
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.2s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

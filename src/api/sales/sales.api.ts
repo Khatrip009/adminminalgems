@@ -1,4 +1,7 @@
 // src/api/sales/sales.api.ts
+// PRODUCTION-GRADE SALES API
+// Supports CRUD, Profit %, CSV Import, CSV/Excel Export,
+// Register PDF & Invoice PDF
 
 import { apiFetch, API_ROUTES } from "@/lib/apiClient";
 
@@ -9,7 +12,7 @@ import { apiFetch, API_ROUTES } from "@/lib/apiClient";
 const BASE = `${API_ROUTES.sales}/items`;
 
 /* =========================================================
-   HELPERS
+   QUERY BUILDER
 ========================================================= */
 
 function buildQuery(params?: Record<string, any>) {
@@ -27,93 +30,81 @@ function buildQuery(params?: Record<string, any>) {
 }
 
 /* =========================================================
-   TYPES (OPTIONAL BUT SAFE)
+   TYPES
 ========================================================= */
 
-export type SalesItemPayload = {
+export interface DiamondInput {
+  pcs: number;
+  carat: number;
+  rate: number;
+  type?: string;
+  quality?: string | null;
+}
+
+export interface SalesItemPayload {
   number: string;
   item: string;
 
-  diamond_pcs?: number;
-  diamond_carat?: number;
-  rate?: number;
+  diamonds?: DiamondInput[];
 
   gold?: number;
   gold_price?: number;
   labour_charge?: number;
 
-  diamond_packet_id?: string | null;
-  diamond_packet?: string | null;
+  profit_percent?: number; // 🔥 NEW
 
-  craftsman_id?: string | null;
-  craftman?: string | null;
+  product_id?: string | null;
 
   customer_id?: string | null;
   customer_name?: string | null;
 
-  product_id?: string | null;
-  product_image?: File | null;
-};
-
-export type SalesItemUpdatePayload = {
-  number?: string;
-  item?: string;
-  diamond_pcs?: number;
-  diamond_carat?: number;
-  rate?: number;
-  gold?: number;
-  gold_price?: number;
-  labour_charge?: number;
-  selling_price?: number;
-  product_id?: string | null;
-  customer_id?: string | null;
   craftsman_id?: string | null;
+  craftman?: string | null;
+
   product_image?: File | null;
-};
+}
+
+export interface SalesItemUpdatePayload
+  extends Partial<SalesItemPayload> {}
 
 /* =========================================================
-   CREATE SALES ITEM
+   CREATE
 ========================================================= */
 
-export const createSalesItem = (payload: SalesItemPayload | FormData) => {
+export const createSalesItem = (
+  payload: SalesItemPayload | FormData
+) => {
   const isFormData = payload instanceof FormData;
-  
+
   return apiFetch(BASE, {
     method: "POST",
     body: payload,
-    headers: isFormData ? {} : undefined, // Let browser set Content-Type for FormData
+    headers: isFormData ? {} : undefined,
   });
 };
 
 /* =========================================================
-   LIST / SEARCH SALES ITEMS
+   LIST / SEARCH / PAGINATION
 ========================================================= */
 
 export const listSalesItems = (params?: {
-  q?: string;
-  customer_id?: string;
-  diamond_packet_id?: string;
-  from?: string;
-  to?: string;
+  search?: string;
+  page?: number;
   limit?: number;
-  offset?: number;
-  sort?: "number" | "created_at" | "selling_price";
-  dir?: "ASC" | "DESC";
 }) =>
   apiFetch(`${BASE}${buildQuery(params)}`);
 
 /* =========================================================
-   GET SINGLE SALES ITEM
+   GET BY ID
 ========================================================= */
 
 export const getSalesItem = (id: string) => {
   if (!id) throw new Error("sales_item_id_required");
-
   return apiFetch(`${BASE}/${encodeURIComponent(id)}`);
 };
 
 /* =========================================================
-   UPDATE SALES ITEM
+   UPDATE
 ========================================================= */
 
 export const updateSalesItem = (
@@ -121,7 +112,7 @@ export const updateSalesItem = (
   payload: SalesItemUpdatePayload | FormData
 ) => {
   if (!id) throw new Error("sales_item_id_required");
-  
+
   const isFormData = payload instanceof FormData;
 
   return apiFetch(`${BASE}/${encodeURIComponent(id)}`, {
@@ -132,7 +123,7 @@ export const updateSalesItem = (
 };
 
 /* =========================================================
-   DELETE SALES ITEM
+   DELETE
 ========================================================= */
 
 export const deleteSalesItem = (id: string) => {
@@ -144,7 +135,7 @@ export const deleteSalesItem = (id: string) => {
 };
 
 /* =========================================================
-   EXPORT CSV
+   EXPORT – CSV
 ========================================================= */
 
 export const exportSalesItemsCSV = () =>
@@ -154,31 +145,54 @@ export const exportSalesItemsCSV = () =>
   });
 
 /* =========================================================
-   EXPORT PDF
+   EXPORT – EXCEL
 ========================================================= */
 
-export const exportSalesItemsPDF = (params?: {
-  from?: string;
-  to?: string;
-}) =>
-  apiFetch(`${BASE}/export/pdf${buildQuery(params)}`, {
+export const exportSalesItemsExcel = () =>
+  apiFetch(`${BASE}/export/excel`, {
     method: "GET",
     responseType: "blob",
   });
 
 /* =========================================================
-   IMPORT CSV
+   EXPORT – REGISTER PDF (INTERNAL / STATEMENT STYLE)
+========================================================= */
+
+export const exportSalesRegisterPDF = () =>
+  apiFetch(`${BASE}/export/register-pdf`, {
+    method: "GET",
+    responseType: "blob",
+  });
+
+/* =========================================================
+   EXPORT – INVOICE PDF (PRINTABLE BILL)
+========================================================= */
+
+export const exportSalesInvoicePDF = (saleId: string) => {
+  if (!saleId) throw new Error("sales_item_id_required");
+
+  return apiFetch(
+    `${BASE}/${encodeURIComponent(saleId)}/export/invoice-pdf`,
+    {
+      method: "GET",
+      responseType: "blob",
+    }
+  );
+};
+
+/* =========================================================
+   IMPORT – CSV
 ========================================================= */
 
 export const importSalesItemsCSV = (file: File) => {
+  if (!file) throw new Error("csv_file_required");
+
   const formData = new FormData();
   formData.append("file", file);
 
   return apiFetch(`${BASE}/import/csv`, {
     method: "POST",
     body: formData,
-    headers: {
-      // Let browser set boundary
-    },
+    headers: {}, // browser sets multipart boundary
   });
 };
