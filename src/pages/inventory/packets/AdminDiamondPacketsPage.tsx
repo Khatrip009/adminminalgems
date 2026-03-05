@@ -56,13 +56,13 @@ export default function AdminDiamondPacketsPage() {
   /* =====================================================
      OPEN PACKET
   ===================================================== */
-  function openPacket(packetId: string) {
-    if (!warehouseId) return;
+ function openPacket(packetId: string) {
+  if (!warehouseId) return;
 
-    navigate(
-      `/admin/diamonds/packet/${packetId}?warehouse_id=${warehouseId}`
-    );
-  }
+  navigate(
+    `/admin/inventory/packets/${packetId}?warehouse_id=${warehouseId}`
+  );
+}
 
   const paginated = packets.slice(
     page * PAGE_SIZE,
@@ -95,11 +95,11 @@ export default function AdminDiamondPacketsPage() {
           </button>
 
           <button
-            onClick={() => navigate("/admin/diamonds/packet/create")}
-            className="px-4 py-2 border rounded-lg"
-          >
-            Create
-          </button>
+  onClick={() => navigate("/admin/inventory/packets/create")}
+  className="px-4 py-2 border rounded-lg"
+>
+  Create
+</button>
         </div>
       </div>
 

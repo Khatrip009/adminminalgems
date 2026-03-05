@@ -189,37 +189,26 @@ export default function AdminPacketDetailPage() {
           </h3>
 
           <button
-            className="w-full border px-3 py-2 rounded"
-            onClick={() =>
-              navigate(
-                `/admin/diamonds/packet/${packetId}/split`
-              )
-            }
-          >
-            Split Packet
-          </button>
+  className="w-full border px-3 py-2 rounded"
+  onClick={() =>
+    navigate(
+      `/admin/inventory/packets/${packetId}/split`
+    )
+  }
+>
+  Split Packet
+</button>
 
-          <button
-            className="w-full border px-3 py-2 rounded"
-            onClick={() =>
-              navigate(
-                `/admin/diamonds/packet/${packetId}/merge`
-              )
-            }
-          >
-            Merge Packet
-          </button>
-
-          <button
-            className="w-full border px-3 py-2 rounded"
-            onClick={() =>
-              navigate(
-                `/admin/diamonds/packet/${packetId}/receive`
-              )
-            }
-          >
-            Receive Packet
-          </button>
+<button
+  className="w-full border px-3 py-2 rounded"
+  onClick={() =>
+    navigate(
+      `/admin/inventory/packets/${packetId}/merge`
+    )
+  }
+>
+  Merge Packet
+</button>
         </div>
       </div>
     </div>

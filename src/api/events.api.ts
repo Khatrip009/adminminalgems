@@ -1,10 +1,11 @@
-import { API_ROUTES } from "@/lib/apiClient";
+import { API_ROUTES, API_BASE_URL } from "@/lib/apiClient";
+
 
 /* =========================================================
    BASE
 ========================================================= */
-const BASE = `${API_ROUTES.events}`;
 
+const BASE = `${API_BASE_URL}${API_ROUTES.events}`;
 /* =========================================================
    TYPES
 ========================================================= */

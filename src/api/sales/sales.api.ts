@@ -38,7 +38,7 @@ export interface DiamondInput {
   carat: number;
   rate: number;
   type?: string;
-  quality?: string | null;
+  packet_no?: string | null;   // 🔁 changed from quality
 }
 
 export interface SalesItemPayload {
@@ -51,7 +51,7 @@ export interface SalesItemPayload {
   gold_price?: number;
   labour_charge?: number;
 
-  profit_percent?: number; // 🔥 NEW
+  profit_percent?: number;      // backend calculates profit_amount
 
   product_id?: string | null;
 
