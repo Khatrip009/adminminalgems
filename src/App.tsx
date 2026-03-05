@@ -112,6 +112,7 @@ import AdminShippingRulesPage from "./pages/logistics/shipping/AdminShippingRule
    MISC
 ========================= */
 import PrintCenterPage from "./pages/misc/PrintCenterPage";
+import NotFoundPage from "./pages/misc/NotFoundPage";
 
 /* ===================================================== */
 
@@ -211,7 +212,7 @@ const App: React.FC = () => {
       </Route>
 
       {/* ================= FALLBACK ================= */}
-      <Route path="*" element={<Navigate to="/admin" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 };
