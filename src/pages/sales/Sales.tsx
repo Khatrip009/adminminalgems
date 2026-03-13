@@ -152,19 +152,23 @@ const Sales: React.FC = () => {
 
       if (!r?.ok) throw new Error();
 
-      const normalized = (r.results || []).map((s: any) => ({
-        ...s,
-        diamonds:
-          let diamonds = [];
+      const normalized = (r.results || []).map((s: any) => {
+      let diamonds = [];
 
-          try {
-            diamonds =
-              typeof s.diamonds === "string"
-                ? JSON.parse(s.diamonds)
-                : s.diamonds || [];
-          } catch {
-            diamonds = [];
-          }));
+      try {
+        diamonds =
+          typeof s.diamonds === "string"
+            ? JSON.parse(s.diamonds)
+            : s.diamonds || [];
+      } catch {
+        diamonds = [];
+      }
+
+      return {
+        ...s,
+        diamonds,
+      };
+    });
 
       setItems(normalized);
       setCount(r.count || 0);
