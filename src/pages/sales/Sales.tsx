@@ -155,10 +155,16 @@ const Sales: React.FC = () => {
       const normalized = (r.results || []).map((s: any) => ({
         ...s,
         diamonds:
-          typeof s.diamonds === "string"
-            ? JSON.parse(s.diamonds)
-            : s.diamonds || [],
-      }));
+          let diamonds = [];
+
+          try {
+            diamonds =
+              typeof s.diamonds === "string"
+                ? JSON.parse(s.diamonds)
+                : s.diamonds || [];
+          } catch {
+            diamonds = [];
+          }));
 
       setItems(normalized);
       setCount(r.count || 0);
@@ -178,8 +184,8 @@ const Sales: React.FC = () => {
   ========================================================= */
 
   const sortedItems = [...items].sort((a, b) => {
-    const valA: any = a[sortKey];
-    const valB: any = b[sortKey];
+    const valA = a[sortKey] ?? 0;
+    const valB = b[sortKey] ?? 0;
 
     if (sortDir === "asc") return valA > valB ? 1 : -1;
     return valA < valB ? 1 : -1;
@@ -371,7 +377,11 @@ const Sales: React.FC = () => {
                   <td className="p-2 border">
                     {sale.product_image_url && (
                       <img
-                        src={`${import.meta.env.VITE_API_BASE_URL}${sale.product_image_url}`}
+                        src={
+                              sale.product_image_url?.startsWith("http")
+                                ? sale.product_image_url
+                                : `${import.meta.env.VITE_API_BASE_URL}${sale.product_image_url}`
+                            }
                         className="h-10 w-10 object-cover rounded"
                       />
                     )}
@@ -623,7 +633,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       const payload: SalesItemPayload = {
         number: data.number,
         item: data.item,
-        diamonds: data.diamonds,
+        diamonds: JSON.stringify(data.diamonds),
         gold: data.gold,
         gold_price: data.gold_price,
         labour_charge: data.labour_charge,
@@ -636,18 +646,15 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       };
 
       // Handle image
-      let formData: FormData | SalesItemPayload = payload;
+      const formData = new FormData();
+
+      Object.entries(payload).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          formData.append(key, String(val));
+        }
+      });
+
       if (data.product_image && data.product_image[0]) {
-        formData = new FormData();
-        Object.entries(payload).forEach(([key, val]) => {
-          if (val !== undefined && val !== null) {
-            if (key === "diamonds") {
-              formData.append(key, JSON.stringify(val));
-            } else {
-              formData.append(key, String(val));
-            }
-          }
-        });
         formData.append("product_image", data.product_image[0]);
       }
 
