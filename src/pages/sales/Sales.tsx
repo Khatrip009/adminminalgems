@@ -136,23 +136,24 @@ const Sales: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* =========================================================
-     LOAD SALES
-  ========================================================= */
+   LOAD SALES
+========================================================= */
 
-  const loadSales = useCallback(async () => {
-    try {
-      setLoading(true);
-      const r: any = await listSalesItems({
-        search,
-        from: fromDate || undefined,
-        to: toDate || undefined,
-        page,
-        limit,
-      });
+const loadSales = useCallback(async () => {
+  try {
+    setLoading(true);
 
-      if (!r?.ok) throw new Error();
+    const r: any = await listSalesItems({
+      search,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+      page,
+      limit,
+    });
 
-      const normalized = (r.results || []).map((s: any) => {
+    if (!r?.ok) throw new Error();
+
+    const normalized = (r.results || []).map((s: any) => {
       let diamonds = [];
 
       try {
@@ -170,19 +171,19 @@ const Sales: React.FC = () => {
       };
     });
 
-      setItems(normalized);
-      setCount(r.count || 0);
-    } catch {
-      toast.error("Failed to load sales");
-    } finally {
-      setLoading(false);
-    }
-  }, [search, fromDate, toDate, page, limit]);
+    setItems(normalized);
+    setCount(r.count || 0);
 
-  useEffect(() => {
-    loadSales();
-  }, [loadSales]);
+  } catch {
+    toast.error("Failed to load sales");
+  } finally {
+    setLoading(false);
+  }
+}, [search, fromDate, toDate, page, limit]);
 
+useEffect(() => {
+  loadSales();
+}, [loadSales]);
   /* =========================================================
      SORTING
   ========================================================= */
