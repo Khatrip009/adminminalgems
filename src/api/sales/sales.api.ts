@@ -1,7 +1,7 @@
 // src/api/sales/sales.api.ts
 // PRODUCTION-GRADE SALES API
 // Supports CRUD, Profit %, CSV Import, CSV/Excel Export,
-// Register PDF & Invoice PDF
+// Register PDF & Invoice PDF, Grouping, and Selected Exports
 
 import { apiFetch, API_ROUTES } from "@/lib/apiClient";
 
@@ -38,34 +38,48 @@ export interface DiamondInput {
   carat: number;
   rate: number;
   type?: string;
-  packet_no?: string | null;   // 🔁 changed from quality
+  packet_no?: string | null;
 }
 
 export interface SalesItemPayload {
   number: string;
   item: string;
-
   diamonds?: DiamondInput[];
-
   gold?: number;
+  gold_carat?: number;           // Added for gold karat
+  gold_rate?: number;            // Added for gold rate
   gold_price?: number;
   labour_charge?: number;
-
-  profit_percent?: number;      // backend calculates profit_amount
-
+  profit_percent?: number;
   product_id?: string | null;
-
   customer_id?: string | null;
   customer_name?: string | null;
-
   craftsman_id?: string | null;
   craftman?: string | null;
-
   product_image?: File | null;
 }
 
 export interface SalesItemUpdatePayload
   extends Partial<SalesItemPayload> {}
+
+export interface GroupedSalesResult {
+  results: Array<{
+    customer_id?: string;
+    customer_name: string;
+    total_orders: number;
+    total_sales: number;
+  }>;
+}
+
+export interface GroupedCraftsmanResult {
+  results: Array<{
+    craftsman_id?: string;
+    craftsman_name: string;
+    total_orders: number;
+    total_labour: number;
+    total_sales: number;
+  }>;
+}
 
 /* =========================================================
    CREATE
@@ -84,13 +98,19 @@ export const createSalesItem = (
 };
 
 /* =========================================================
-   LIST / SEARCH / PAGINATION
+   LIST / SEARCH / FILTER / SORT / PAGINATION
 ========================================================= */
 
 export const listSalesItems = (params?: {
   search?: string;
   page?: number;
   limit?: number;
+  from?: string;          // Date filter start
+  to?: string;            // Date filter end
+  customer_id?: string;
+  craftsman_id?: string;
+  sortBy?: string;
+  order?: "ASC" | "DESC";
 }) =>
   apiFetch(`${BASE}${buildQuery(params)}`);
 
@@ -135,7 +155,47 @@ export const deleteSalesItem = (id: string) => {
 };
 
 /* =========================================================
-   EXPORT – CSV
+   GROUPING APIS
+========================================================= */
+
+export const groupSalesByCustomer = () =>
+  apiFetch(`${BASE}/group/customer`);
+
+export const groupSalesByCraftsman = () =>
+  apiFetch(`${BASE}/group/craftsman`);
+
+/* =========================================================
+   EXPORT SELECTED ROWS
+========================================================= */
+
+export const exportSelectedSalesExcel = (ids: string[]) => {
+  if (!ids || !ids.length) throw new Error("ids_required");
+
+  return apiFetch(`${BASE}/export/excel-selected`, {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    responseType: "blob",
+  });
+};
+
+export const exportSelectedSalesPDF = (ids: string[]) => {
+  if (!ids || !ids.length) throw new Error("ids_required");
+
+  return apiFetch(`${BASE}/export/pdf-selected`, {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    responseType: "blob",
+  });
+};
+
+/* =========================================================
+   EXPORT – CSV (ALL)
 ========================================================= */
 
 export const exportSalesItemsCSV = () =>
@@ -145,7 +205,7 @@ export const exportSalesItemsCSV = () =>
   });
 
 /* =========================================================
-   EXPORT – EXCEL
+   EXPORT – EXCEL (ALL)
 ========================================================= */
 
 export const exportSalesItemsExcel = () =>
@@ -155,7 +215,7 @@ export const exportSalesItemsExcel = () =>
   });
 
 /* =========================================================
-   EXPORT – REGISTER PDF (INTERNAL / STATEMENT STYLE)
+   EXPORT – REGISTER PDF (A3 LEDGER STYLE WITH PAGE SUBTOTAL)
 ========================================================= */
 
 export const exportSalesRegisterPDF = () =>
@@ -165,7 +225,7 @@ export const exportSalesRegisterPDF = () =>
   });
 
 /* =========================================================
-   EXPORT – INVOICE PDF (PRINTABLE BILL)
+   EXPORT – INVOICE PDF (PROFESSIONAL JEWELLERY INVOICE)
 ========================================================= */
 
 export const exportSalesInvoicePDF = (saleId: string) => {

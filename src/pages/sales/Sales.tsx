@@ -15,6 +15,14 @@ import {
   Pencil,
   X,
   Save,
+  Users,
+  Hammer,
+  Filter,
+  Calendar,
+  Search,
+  RefreshCw,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 
 // API imports
@@ -29,6 +37,10 @@ import {
   createSalesItem,
   updateSalesItem,
   getSalesItem,
+  exportSelectedSalesExcel,
+  exportSelectedSalesPDF,
+  groupSalesByCustomer,
+  groupSalesByCraftsman,
   type SalesItemPayload,
   type DiamondInput,
 } from "@/api/sales/sales.api";
@@ -62,6 +74,8 @@ interface Sale {
   diamond_carat: number;
   total_diamond_price: number;
   gold: number;
+  gold_carat: number;
+  gold_rate: number;
   gold_price: number;
   labour_charge: number;
   total_making_cost: number;
@@ -75,16 +89,14 @@ interface Sale {
   created_at: string;
 }
 
-/* =========================================================
-   FORM TYPES
-========================================================= */
-
 interface SaleFormValues {
   number: string;
   item: string;
   product_id?: string | null;
   diamonds: DiamondInput[];
   gold: number;
+  gold_carat: number;
+  gold_rate: number;
   gold_price: number;
   labour_charge: number;
   profit_percent: number;
@@ -109,6 +121,11 @@ const money = (v?: number | string) =>
 
 const dateFmt = (d: string) => new Date(d).toLocaleDateString("en-IN");
 
+// Auto-calculate gold price
+const calculateGoldPrice = (gold: number, goldRate: number) => {
+  return gold * goldRate;
+};
+
 /* =========================================================
    MAIN COMPONENT
 ========================================================= */
@@ -120,12 +137,28 @@ const Sales: React.FC = () => {
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [customerFilter, setCustomerFilter] = useState<string>("");
+  const [craftsmanFilter, setCraftsmanFilter] = useState<string>("");
   const [sortKey, setSortKey] = useState<keyof Sale>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const limit = 20;
   const [count, setCount] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Selection state
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+
+  // Grouping modal state
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupData, setGroupData] = useState<any[]>([]);
+  const [groupType, setGroupType] = useState<"customer" | "craftsman">("customer");
+  const [groupLoading, setGroupLoading] = useState(false);
+
+  // Masters data for filters
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [craftsmen, setCraftsmen] = useState<any[]>([]);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -136,66 +169,89 @@ const Sales: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* =========================================================
-   LOAD SALES
-========================================================= */
-
-const loadSales = useCallback(async () => {
-  try {
-    setLoading(true);
-
-    const r: any = await listSalesItems({
-      search,
-      from: fromDate || undefined,
-      to: toDate || undefined,
-      page,
-      limit,
-    });
-
-    if (!r?.ok) throw new Error();
-
-    const normalized = (r.results || []).map((s: any) => {
-      let diamonds = [];
-
+     LOAD MASTERS
+  ========================================================= */
+  useEffect(() => {
+    const loadMasters = async () => {
       try {
-        diamonds =
-          typeof s.diamonds === "string"
-            ? JSON.parse(s.diamonds)
-            : s.diamonds || [];
-      } catch {
-        diamonds = [];
+        const [custRes, craftRes] = await Promise.all([
+          listCustomers({ limit: 1000 }),
+          listCraftsmen({ limit: 1000 }),
+        ]);
+        if (custRes?.ok) setCustomers(custRes.results || []);
+        if (craftRes?.ok) setCraftsmen(craftRes.results || []);
+      } catch (error) {
+        console.error("Failed to load masters for filters", error);
       }
+    };
+    loadMasters();
+  }, []);
 
-      return {
-        ...s,
-        diamonds,
+  /* =========================================================
+     LOAD SALES (with server-side sorting & filtering)
+  ========================================================= */
+  const loadSales = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const params: any = {
+        search: search || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        page,
+        limit,
+        sortBy: sortKey,
+        order: sortDir.toUpperCase(),
       };
-    });
+      if (customerFilter) params.customer_id = customerFilter;
+      if (craftsmanFilter) params.craftsman_id = craftsmanFilter;
 
-    setItems(normalized);
-    setCount(r.count || 0);
+      const r: any = await listSalesItems(params);
 
-  } catch {
-    toast.error("Failed to load sales");
-  } finally {
-    setLoading(false);
-  }
-}, [search, fromDate, toDate, page, limit]);
+      if (!r?.ok) throw new Error("Failed to load sales");
 
-useEffect(() => {
-  loadSales();
-}, [loadSales]);
+      const normalized = (r.results || []).map((s: any) => {
+        let diamonds = [];
+        try {
+          diamonds =
+            typeof s.diamonds === "string"
+              ? JSON.parse(s.diamonds)
+              : s.diamonds || [];
+        } catch {
+          diamonds = [];
+        }
+        return { ...s, diamonds };
+      });
+
+      setItems(normalized);
+      setCount(r.count || 0);
+    } catch (error) {
+      toast.error("Failed to load sales");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [search, fromDate, toDate, customerFilter, craftsmanFilter, page, limit, sortKey, sortDir]);
+
+  useEffect(() => {
+    loadSales();
+  }, [loadSales]);
+
+  /* =========================================================
+     RESET FILTERS
+  ========================================================= */
+  const resetFilters = () => {
+    setSearch("");
+    setFromDate("");
+    setToDate("");
+    setCustomerFilter("");
+    setCraftsmanFilter("");
+    setPage(1);
+  };
+
   /* =========================================================
      SORTING
   ========================================================= */
-
-  const sortedItems = [...items].sort((a, b) => {
-    const valA = a[sortKey] ?? 0;
-    const valB = b[sortKey] ?? 0;
-
-    if (sortDir === "asc") return valA > valB ? 1 : -1;
-    return valA < valB ? 1 : -1;
-  });
-
   const handleSort = (key: keyof Sale) => {
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -203,45 +259,118 @@ useEffect(() => {
       setSortKey(key);
       setSortDir("asc");
     }
+    setPage(1);
+  };
+
+  /* =========================================================
+     SELECTION
+  ========================================================= */
+  const toggleSelectAll = () => {
+    if (selectedRows.size === items.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(items.map((i) => i.id)));
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    const newSet = new Set(selectedRows);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedRows(newSet);
   };
 
   /* =========================================================
      EXPORT / IMPORT
   ========================================================= */
-
   const download = (blob: Blob, filename: string) => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
 
   const safeDownload = async (fn: () => Promise<Blob>, filename: string) => {
     try {
+      toast.loading("Preparing download...", { id: "download" });
       const blob = await fn();
       download(blob, filename);
-    } catch {
-      toast.error("Download failed");
+      toast.success("Download complete", { id: "download" });
+    } catch (error) {
+      toast.error("Download failed", { id: "download" });
+      console.error(error);
     }
   };
 
   const handleImport = async (file: File) => {
+    if (!file) return;
+    
     try {
+      toast.loading("Importing...", { id: "import" });
       const r = await importSalesItemsCSV(file);
       if (!r?.ok) throw new Error();
-      toast.success("Import successful");
+      toast.success(`Import successful: ${r.imported || 0} records`, { id: "import" });
       loadSales();
-    } catch {
-      toast.error("Import failed");
+    } catch (error) {
+      toast.error("Import failed", { id: "import" });
+      console.error(error);
+    }
+  };
+
+  const exportSelected = async (type: "excel" | "pdf") => {
+    if (selectedRows.size === 0) {
+      toast.error("No rows selected");
+      return;
+    }
+    const ids = Array.from(selectedRows);
+    try {
+      toast.loading(`Exporting selected ${type.toUpperCase()}...`, { id: "export" });
+      let blob: Blob;
+      if (type === "excel") {
+        blob = await exportSelectedSalesExcel(ids);
+        download(blob, `selected_sales_${new Date().toISOString().split('T')[0]}.xlsx`);
+      } else {
+        blob = await exportSelectedSalesPDF(ids);
+        download(blob, `selected_sales_${new Date().toISOString().split('T')[0]}.pdf`);
+      }
+      toast.success("Export complete", { id: "export" });
+    } catch (error) {
+      toast.error("Export failed", { id: "export" });
+      console.error(error);
+    }
+  };
+
+  /* =========================================================
+     GROUPING MODAL
+  ========================================================= */
+  const showGroup = async (type: "customer" | "craftsman") => {
+    try {
+      setGroupLoading(true);
+      setGroupType(type);
+      const result = type === "customer"
+        ? await groupSalesByCustomer()
+        : await groupSalesByCraftsman();
+      if (result?.ok) {
+        setGroupData(result.results || []);
+        setShowGroupModal(true);
+      } else {
+        toast.error("Failed to load grouping data");
+      }
+    } catch (error) {
+      toast.error("Error loading grouping");
+      console.error(error);
+    } finally {
+      setGroupLoading(false);
     }
   };
 
   /* =========================================================
      MODAL HANDLERS
   ========================================================= */
-
   const openCreateModal = () => {
     setEditingId(null);
     setIsModalOpen(true);
@@ -257,268 +386,449 @@ useEffect(() => {
     setEditingId(null);
   };
 
-  /* ========================================================= */
-
   const totalPages = Math.ceil(count / limit);
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
-      {/* BRAND HEADER */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <img src="/logo_minalgems.png" className="h-12" alt="Minal Gems" />
-          <h1 className="text-3xl font-bold text-gray-800">Sales Register</h1>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="container mx-auto px-4 py-6 lg:px-6">
+        {/* Header Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <img 
+                src="/logo_minalgems.png" 
+                className="h-12 w-auto object-contain" 
+                alt="Minal Gems" 
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+              <div>
+                <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Sales Register</h1>
+                <p className="text-sm text-gray-500 mt-1">Manage and track all sales transactions</p>
+              </div>
+            </div>
 
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => safeDownload(exportSalesItemsCSV, "sales.csv")}
-            className="btn-green"
-          >
-            <Download size={16} /> CSV
-          </button>
-          <button
-            onClick={() => safeDownload(exportSalesItemsExcel, "sales.xlsx")}
-            className="btn-green"
-          >
-            <Download size={16} /> Excel
-          </button>
-          <button
-            onClick={() =>
-              safeDownload(exportSalesRegisterPDF, "sales-register.pdf")
-            }
-            className="btn-red"
-          >
-            <FileText size={16} /> Register PDF
-          </button>
-          <button onClick={() => fileRef.current?.click()} className="btn-blue">
-            Import CSV
-          </button>
-          <input
-            type="file"
-            ref={fileRef}
-            hidden
-            accept=".csv"
-            onChange={(e) => e.target.files && handleImport(e.target.files[0])}
-          />
-          <button onClick={openCreateModal} className="btn-primary">
-            <Plus size={16} /> New Sale
-          </button>
-        </div>
-      </div>
-
-      {/* ADVANCED FILTERS */}
-      <div className="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <input
-          type="text"
-          placeholder="Search invoice / customer..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <input
-          type="date"
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <input
-          type="date"
-          value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <button onClick={loadSales} className="bg-gray-800 text-white rounded">
-          Apply Filters
-        </button>
-      </div>
-
-      {/* TABLE */}
-      <div className="bg-white rounded shadow overflow-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead className="bg-gray-200 sticky top-0 z-10">
-            <tr>
-              <th></th>
-              <th onClick={() => handleSort("number")} className="cursor-pointer p-2 border">
-                Invoice
-              </th>
-              <th className="p-2 border">Image</th>
-              <th className="p-2 border">Item</th>
-              <th className="p-2 border">Dia Pcs</th>
-              <th className="p-2 border">Dia Ct</th>
-              <th className="p-2 border">Diamond ₹</th>
-              <th className="p-2 border">Gold (g)</th>
-              <th className="p-2 border">Gold ₹</th>
-              <th className="p-2 border">Making</th>
-              <th className="p-2 border">Profit</th>
-              <th className="p-2 border">Selling</th>
-              <th className="p-2 border">Customer</th>
-              <th className="p-2 border">Craftsman</th>
-              <th className="p-2 border">Date</th>
-              <th className="p-2 border">Invoice</th>
-              <th className="p-2 border">Edit</th>
-              <th className="p-2 border">Delete</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {sortedItems.map((sale) => (
-              <React.Fragment key={sale.id}>
-                <tr className="hover:bg-gray-50">
-                  <td className="p-2 border text-center">
-                    <button
-                      onClick={() => {
-                        const next = new Set(expanded);
-                        next.has(sale.id) ? next.delete(sale.id) : next.add(sale.id);
-                        setExpanded(next);
-                      }}
-                    >
-                      {expanded.has(sale.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </button>
-                  </td>
-
-                  <td className="p-2 border">{sale.number}</td>
-
-                  <td className="p-2 border">
-                    {sale.product_image_url && (
-                      <img
-                        src={
-                              sale.product_image_url?.startsWith("http")
-                                ? sale.product_image_url
-                                : `${import.meta.env.VITE_API_BASE_URL}${sale.product_image_url}`
-                            }
-                        className="h-10 w-10 object-cover rounded"
-                      />
-                    )}
-                  </td>
-
-                  <td className="p-2 border">{sale.item}</td>
-                  <td className="p-2 border">{sale.diamond_pcs}</td>
-                  <td className="p-2 border">{sale.diamond_carat}</td>
-                  <td className="p-2 border">{money(sale.total_diamond_price)}</td>
-                  <td className="p-2 border font-medium">{Number(sale.gold).toFixed(3)}</td>
-                  <td className="p-2 border">{money(sale.gold_price)}</td>
-                  <td className="p-2 border">{money(sale.total_making_cost)}</td>
-                  <td
-                    className={`p-2 border font-semibold ${
-                      sale.profit_amount > 0 ? "text-green-600" : "text-red-500"
-                    }`}
-                  >
-                    {money(sale.profit_amount)}
-                  </td>
-                  <td className="p-2 border font-bold text-gray-800">{money(sale.selling_price)}</td>
-                  <td className="p-2 border">{sale.customer_name}</td>
-                  <td className="p-2 border font-medium text-gray-700">
-                    {sale.craftsman_name || "—"}
-                  </td>
-                  <td className="p-2 border">{dateFmt(sale.created_at)}</td>
-
-                  <td className="p-2 border text-center">
-                    <button
-                      onClick={() =>
-                        safeDownload(
-                          () => exportSalesInvoicePDF(sale.id),
-                          `invoice-${sale.number}.pdf`
-                        )
-                      }
-                    >
-                      <Receipt size={16} />
-                    </button>
-                  </td>
-
-                  <td className="p-2 border text-center">
-                    <button onClick={() => openEditModal(sale.id)} className="text-blue-600 hover:text-blue-800">
-                      <Pencil size={16} />
-                    </button>
-                  </td>
-
-                  <td className="p-2 border text-center">
-                    <button
-                      onClick={async () => {
-                        if (!confirm("Delete?")) return;
-                        await deleteSalesItem(sale.id);
-                        loadSales();
-                      }}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-
-                {/* DIAMOND EXPAND ROW */}
-                {expanded.has(sale.id) && (
-                  <tr>
-                    <td colSpan={18} className="bg-gray-50 p-4 border">
-                      <h4 className="font-semibold mb-2">Diamond Details</h4>
-                      <table className="w-full text-xs border">
-                        <thead className="bg-gray-200">
-                          <tr>
-                            <th className="border p-1">Pcs</th>
-                            <th className="border p-1">Carat</th>
-                            <th className="border p-1">Rate</th>
-                            <th className="border p-1">Amount</th>
-                            <th className="border p-1">Type</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sale.diamonds.map((d, i) => (
-                            <tr key={i}>
-                              <td className="border p-1">{d.pcs}</td>
-                              <td className="border p-1">{d.carat}</td>
-                              <td className="border p-1">{money(d.rate)}</td>
-                              <td className="border p-1">{money(d.amount)}</td>
-                              <td className="border p-1">{d.type}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-
-        {items.length === 0 && !loading && (
-          <div className="p-6 text-center text-gray-500">No sales found</div>
-        )}
-      </div>
-
-      {/* PAGINATION */}
-      {totalPages > 1 && (
-        <div className="flex justify-between mt-4">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="p-2 border rounded disabled:opacity-50"
-            >
-              <ChevronLeft />
-            </button>
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="p-2 border rounded disabled:opacity-50"
-            >
-              <ChevronRight />
-            </button>
+            <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+              <button
+                onClick={() => safeDownload(exportSalesItemsCSV, `sales_${new Date().toISOString().split('T')[0]}.csv`)}
+                className="btn-green inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              >
+                <Download size={16} /> CSV
+              </button>
+              <button
+                onClick={() => safeDownload(exportSalesItemsExcel, `sales_${new Date().toISOString().split('T')[0]}.xlsx`)}
+                className="btn-green inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              >
+                <Download size={16} /> Excel
+              </button>
+              <button
+                onClick={() => safeDownload(exportSalesRegisterPDF, `sales_register_${new Date().toISOString().split('T')[0]}.pdf`)}
+                className="btn-red inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                <FileText size={16} /> Register PDF
+              </button>
+              <button
+                onClick={() => exportSelected("excel")}
+                className="btn-blue inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                disabled={selectedRows.size === 0}
+              >
+                <Download size={16} /> Selected Excel
+              </button>
+              <button
+                onClick={() => exportSelected("pdf")}
+                className="btn-blue inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                disabled={selectedRows.size === 0}
+              >
+                <FileText size={16} /> Selected PDF
+              </button>
+              <button onClick={() => fileRef.current?.click()} className="btn-purple inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                Import CSV
+              </button>
+              <input
+                type="file"
+                ref={fileRef}
+                hidden
+                accept=".csv"
+                onChange={(e) => e.target.files && handleImport(e.target.files[0])}
+              />
+              <button onClick={openCreateModal} className="btn-primary inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                <Plus size={16} /> New Sale
+              </button>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* CREATE/EDIT MODAL */}
-      {isModalOpen && (
-        <SaleModal
-          editingId={editingId}
-          onClose={closeModal}
-          onSuccess={loadSales}
-        />
-      )}
+        {/* Filters Section */}
+        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="w-full px-6 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition"
+          >
+            <div className="flex items-center gap-2">
+              <Filter size={18} />
+              <span className="font-medium">Advanced Filters</span>
+              {(search || fromDate || toDate || customerFilter || craftsmanFilter) && (
+                <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded-full">Active</span>
+              )}
+            </div>
+            {showFilters ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+          
+          {showFilters && (
+            <div className="p-6 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search invoice / item..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="From Date"
+                  />
+                </div>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="To Date"
+                  />
+                </div>
+                <select
+                  value={customerFilter}
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">All Customers</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={craftsmanFilter}
+                  onChange={(e) => setCraftsmanFilter(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">All Craftsmen</option>
+                  {craftsmen.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button onClick={loadSales} className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition">
+                    Apply
+                  </button>
+                  <button onClick={resetFilters} className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition">
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons Row */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          <button onClick={() => showGroup("customer")} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition">
+            <Users size={16} /> Group by Customer
+          </button>
+          <button onClick={() => showGroup("craftsman")} className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition">
+            <Hammer size={16} /> Group by Craftsman
+          </button>
+          {selectedRows.size > 0 && (
+            <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
+              {selectedRows.size} row(s) selected
+            </div>
+          )}
+        </div>
+
+        {/* Table Section */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th className="p-3 border-b text-center w-12">
+                    <button onClick={toggleSelectAll} className="hover:opacity-70">
+                      {selectedRows.size === items.length && items.length > 0 ? (
+                        <CheckSquare size={18} className="text-indigo-600" />
+                      ) : (
+                        <Square size={18} className="text-gray-400" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="p-3 border-b w-10"></th>
+                  <th onClick={() => handleSort("number")} className="cursor-pointer p-3 border-b hover:bg-gray-200 transition">
+                    Invoice #
+                  </th>
+                  <th className="p-3 border-b">Image</th>
+                  <th className="p-3 border-b">Item</th>
+                  <th className="p-3 border-b">Dia Pcs</th>
+                  <th className="p-3 border-b">Dia Ct</th>
+                  <th className="p-3 border-b">Diamond ₹</th>
+                  <th className="p-3 border-b">Gold (g)</th>
+                  <th className="p-3 border-b">Gold Carat</th>
+                  <th className="p-3 border-b">Gold Rate</th>
+                  <th className="p-3 border-b">Gold ₹</th>
+                  <th className="p-3 border-b">Making</th>
+                  <th className="p-3 border-b">Profit</th>
+                  <th className="p-3 border-b">Selling</th>
+                  <th className="p-3 border-b">Customer</th>
+                  <th className="p-3 border-b">Craftsman</th>
+                  <th className="p-3 border-b">Date</th>
+                  <th className="p-3 border-b">Invoice</th>
+                  <th className="p-3 border-b">Edit</th>
+                  <th className="p-3 border-b">Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={21} className="p-8 text-center">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                      <p className="mt-2 text-gray-500">Loading...</p>
+                    </td>
+                  </tr>
+                ) : items.length === 0 ? (
+                  <tr>
+                    <td colSpan={21} className="p-8 text-center text-gray-500">
+                      No sales records found
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((sale) => (
+                    <React.Fragment key={sale.id}>
+                      <tr className="hover:bg-gray-50 transition">
+                        <td className="p-3 border-b text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.has(sale.id)}
+                            onChange={() => toggleSelectRow(sale.id)}
+                            className="rounded border-gray-300"
+                          />
+                        </td>
+                        <td className="p-3 border-b text-center">
+                          <button
+                            onClick={() => {
+                              const next = new Set(expanded);
+                              next.has(sale.id) ? next.delete(sale.id) : next.add(sale.id);
+                              setExpanded(next);
+                            }}
+                            className="hover:bg-gray-200 p-1 rounded"
+                          >
+                            {expanded.has(sale.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </button>
+                        </td>
+                        <td className="p-3 border-b font-medium">{sale.number}</td>
+                        <td className="p-3 border-b">
+                          {sale.product_image_url && (
+                            <img
+                              src={
+                                sale.product_image_url?.startsWith("http")
+                                  ? sale.product_image_url
+                                  : `${import.meta.env.VITE_API_BASE_URL}${sale.product_image_url}`
+                              }
+                              className="h-10 w-10 object-cover rounded"
+                              alt="product"
+                            />
+                          )}
+                        </td>
+                        <td className="p-3 border-b max-w-xs truncate">{sale.item}</td>
+                        <td className="p-3 border-b text-center">{sale.diamond_pcs}</td>
+                        <td className="p-3 border-b text-right">{Number(sale.diamond_carat).toFixed(3)}</td>
+                        <td className="p-3 border-b text-right">{money(sale.total_diamond_price)}</td>
+                        <td className="p-3 border-b text-right">{Number(sale.gold).toFixed(3)}</td>
+                        <td className="p-3 border-b text-right">{Number(sale.gold_carat).toFixed(1)}</td>
+                        <td className="p-3 border-b text-right">{money(sale.gold_rate)}</td>
+                        <td className="p-3 border-b text-right">{money(sale.gold_price)}</td>
+                        <td className="p-3 border-b text-right">{money(sale.total_making_cost)}</td>
+                        <td className={`p-3 border-b text-right font-semibold ${sale.profit_amount > 0 ? "text-green-600" : "text-red-500"}`}>
+                          {money(sale.profit_amount)}
+                        </td>
+                        <td className="p-3 border-b text-right font-bold text-gray-800">{money(sale.selling_price)}</td>
+                        <td className="p-3 border-b max-w-xs truncate">{sale.customer_name || "—"}</td>
+                        <td className="p-3 border-b">{sale.craftsman_name || "—"}</td>
+                        <td className="p-3 border-b whitespace-nowrap">{dateFmt(sale.created_at)}</td>
+                        <td className="p-3 border-b text-center">
+                          <button
+                            onClick={() =>
+                              safeDownload(
+                                () => exportSalesInvoicePDF(sale.id),
+                                `invoice-${sale.number}.pdf`
+                              )
+                            }
+                            className="text-indigo-600 hover:text-indigo-800 transition"
+                            title="Download Invoice"
+                          >
+                            <Receipt size={18} />
+                          </button>
+                        </td>
+                        <td className="p-3 border-b text-center">
+                          <button onClick={() => openEditModal(sale.id)} className="text-blue-600 hover:text-blue-800 transition" title="Edit">
+                            <Pencil size={18} />
+                          </button>
+                        </td>
+                        <td className="p-3 border-b text-center">
+                          <button
+                            onClick={async () => {
+                              if (confirm("Delete this sale record?")) {
+                                try {
+                                  await deleteSalesItem(sale.id);
+                                  toast.success("Sale deleted");
+                                  loadSales();
+                                } catch {
+                                  toast.error("Delete failed");
+                                }
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 transition"
+                            title="Delete"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                      {expanded.has(sale.id) && (
+                        <tr>
+                          <td colSpan={21} className="bg-gray-50 p-4 border-b">
+                            <h4 className="font-semibold mb-2 text-gray-700">Diamond Details</h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs border">
+                                <thead className="bg-gray-200">
+                                  <tr>
+                                    <th className="border p-2 text-left">Pcs</th>
+                                    <th className="border p-2 text-left">Carat</th>
+                                    <th className="border p-2 text-left">Rate</th>
+                                    <th className="border p-2 text-left">Amount</th>
+                                    <th className="border p-2 text-left">Type</th>
+                                    <th className="border p-2 text-left">Packet No</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {sale.diamonds.map((d, i) => (
+                                    <tr key={i}>
+                                      <td className="border p-2">{d.pcs}</td>
+                                      <td className="border p-2">{Number(d.carat).toFixed(3)}</td>
+                                      <td className="border p-2">{money(d.rate)}</td>
+                                      <td className="border p-2">{money(d.amount)}</td>
+                                      <td className="border p-2">{d.type || "Diamond"}</td>
+                                      <td className="border p-2">{d.packet_no || "-"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-4 border-t">
+              <div className="text-sm text-gray-600">
+                Page {page} of {totalPages} ({count} total records)
+              </div>
+              <div className="flex gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-3 py-1 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Grouping Modal */}
+        {showGroupModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="flex justify-between items-center p-6 border-b sticky top-0 bg-white">
+                <h2 className="text-xl font-bold">
+                  Group by {groupType === "customer" ? "Customer" : "Craftsman"}
+                </h2>
+                <button onClick={() => setShowGroupModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-6">
+                {groupLoading ? (
+                  <div className="text-center py-8">Loading...</div>
+                ) : groupData.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">No data available</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border">
+                      <thead className="bg-gray-100 sticky top-0">
+                        <tr>
+                          <th className="border p-3 text-left">Name</th>
+                          <th className="border p-3 text-right">Total Orders</th>
+                          <th className="border p-3 text-right">Total Sales</th>
+                          {groupType === "craftsman" && (
+                            <th className="border p-3 text-right">Total Labour</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupData.map((g, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="border p-3 font-medium">{g.customer_name || g.craftsman_name}</td>
+                            <td className="border p-3 text-right">{g.total_orders}</td>
+                            <td className="border p-3 text-right text-green-600 font-semibold">{money(g.total_sales)}</td>
+                            {groupType === "craftsman" && (
+                              <td className="border p-3 text-right">{money(g.total_labour)}</td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create/Edit Modal */}
+        {isModalOpen && (
+          <SaleModal
+            editingId={editingId}
+            onClose={closeModal}
+            onSuccess={loadSales}
+          />
+        )}
+      </div>
     </div>
   );
 };
@@ -538,6 +848,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [craftsmen, setCraftsmen] = useState<any[]>([]);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const {
     register,
@@ -554,6 +865,8 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       product_id: null,
       diamonds: [{ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" }],
       gold: 0,
+      gold_carat: 0,
+      gold_rate: 0,
       gold_price: 0,
       labour_charge: 0,
       profit_percent: 0,
@@ -570,7 +883,19 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     name: "diamonds",
   });
 
-  // Load master data on mount
+  const watchGold = watch("gold");
+  const watchGoldRate = watch("gold_rate");
+  const watchGoldPrice = watch("gold_price");
+
+  // Auto-calculate gold price when gold or gold_rate changes
+  useEffect(() => {
+    if (watchGold && watchGoldRate && !watchGoldPrice) {
+      const calculated = watchGold * watchGoldRate;
+      setValue("gold_price", calculated);
+    }
+  }, [watchGold, watchGoldRate, watchGoldPrice, setValue]);
+
+  // Load master data
   useEffect(() => {
     const loadMasters = async () => {
       try {
@@ -601,22 +926,27 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               number: sale.number,
               item: sale.item,
               product_id: sale.product_id,
-              diamonds: sale.diamonds.map((d: any) => ({
+              diamonds: (sale.diamonds || []).map((d: any) => ({
                 pcs: d.pcs,
                 carat: d.carat,
                 rate: d.rate,
                 type: d.type || "Diamond",
                 packet_no: d.packet_no || "",
               })),
-              gold: sale.gold,
-              gold_price: sale.gold_price,
-              labour_charge: sale.labour_charge,
-              profit_percent: sale.profit_percent,
+              gold: Number(sale.gold) || 0,
+              gold_carat: Number(sale.gold_carat) || 0,
+              gold_rate: Number(sale.gold_rate) || 0,
+              gold_price: Number(sale.gold_price) || 0,
+              labour_charge: Number(sale.labour_charge) || 0,
+              profit_percent: Number(sale.profit_percent) || 0,
               customer_id: sale.customer_id,
-              customer_name: sale.customer_name,
+              customer_name: sale.customer_name || "",
               craftsman_id: sale.craftsman_id,
-              craftsman_name: sale.craftsman_name,
+              craftsman_name: sale.craftsman_name || "",
             });
+            if (sale.product_image_url) {
+              setImagePreview(sale.product_image_url);
+            }
           } else {
             toast.error("Failed to load sale details");
             onClose();
@@ -630,61 +960,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [editingId, reset, onClose]);
 
-  // Handle form submit
-  const onSubmit = async (data: SaleFormValues) => {
-    setLoading(true);
-    try {
-      // Prepare payload
-      const payload: SalesItemPayload = {
-        number: data.number,
-        item: data.item,
-        diamonds: JSON.stringify(data.diamonds),
-        gold: data.gold,
-        gold_price: data.gold_price,
-        labour_charge: data.labour_charge,
-        profit_percent: data.profit_percent,
-        product_id: data.product_id || null,
-        customer_id: data.customer_id || null,
-        customer_name: data.customer_name || null,
-        craftsman_id: data.craftsman_id || null,
-        craftman: data.craftsman_name || null,
-      };
-
-      // Handle image
-      const formData = new FormData();
-
-      Object.entries(payload).forEach(([key, val]) => {
-        if (val !== undefined && val !== null) {
-          formData.append(key, String(val));
-        }
-      });
-
-      if (data.product_image && data.product_image[0]) {
-        formData.append("product_image", data.product_image[0]);
-      }
-
-      let res;
-      if (editingId) {
-        res = await updateSalesItem(editingId, formData);
-      } else {
-        res = await createSalesItem(formData);
-      }
-
-      if (res?.ok) {
-        toast.success(editingId ? "Sale updated" : "Sale created");
-        onSuccess();
-        onClose();
-      } else {
-        toast.error("Operation failed");
-      }
-    } catch (error) {
-      toast.error("An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Auto-fill item when product selected
   const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const productId = e.target.value;
     const product = products.find((p) => p.id === productId);
@@ -697,7 +972,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   };
 
-  // Auto-fill customer name when customer selected
   const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const custId = e.target.value;
     const customer = customers.find((c) => c.id === custId);
@@ -710,7 +984,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   };
 
-  // Auto-fill craftsman name when craftsman selected
   const handleCraftsmanChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const craftId = e.target.value;
     const craftsman = craftsmen.find((c) => c.id === craftId);
@@ -723,18 +996,75 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   };
 
-  if (loading) {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const onSubmit = async (data: SaleFormValues) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("number", data.number);
+      formData.append("item", data.item);
+      formData.append("diamonds", JSON.stringify(data.diamonds));
+      formData.append("gold", String(data.gold || 0));
+      formData.append("gold_carat", String(data.gold_carat || 0));
+      formData.append("gold_rate", String(data.gold_rate || 0));
+      formData.append("gold_price", String(data.gold_price || 0));
+      formData.append("labour_charge", String(data.labour_charge || 0));
+      formData.append("profit_percent", String(data.profit_percent || 0));
+      
+      if (data.product_id) formData.append("product_id", data.product_id);
+      if (data.customer_id) formData.append("customer_id", data.customer_id);
+      if (data.customer_name) formData.append("customer_name", data.customer_name);
+      if (data.craftsman_id) formData.append("craftsman_id", data.craftsman_id);
+      if (data.craftsman_name) formData.append("craftman", data.craftsman_name);
+      
+      if (data.product_image && data.product_image[0]) {
+        formData.append("product_image", data.product_image[0]);
+      }
+
+      let res;
+      if (editingId) {
+        res = await updateSalesItem(editingId, formData);
+      } else {
+        res = await createSalesItem(formData);
+      }
+
+      if (res?.ok) {
+        toast.success(editingId ? "Sale updated successfully" : "Sale created successfully");
+        onSuccess();
+        onClose();
+      } else {
+        toast.error("Operation failed");
+      }
+    } catch (error) {
+      toast.error("An error occurred");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && editingId) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded shadow-lg">Loading...</div>
+        <div className="bg-white p-6 rounded-lg shadow-lg">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto m-4">
-        <div className="flex justify-between items-center p-6 border-b sticky top-0 bg-white">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b z-10 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold">{editingId ? "Edit Sale" : "New Sale"}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X size={20} />
@@ -748,7 +1078,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Invoice Number *</label>
               <input
                 {...register("number", { required: "Invoice number is required" })}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="INV-001"
               />
               {errors.number && <p className="text-red-500 text-xs mt-1">{errors.number.message}</p>}
@@ -758,7 +1088,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Product (optional)</label>
               <select
                 onChange={handleProductChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
                 value={watch("product_id") || ""}
               >
                 <option value="">-- Select Product --</option>
@@ -774,7 +1104,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Item Description *</label>
               <input
                 {...register("item", { required: "Item description is required" })}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
                 placeholder="Gold ring with diamonds..."
               />
               {errors.item && <p className="text-red-500 text-xs mt-1">{errors.item.message}</p>}
@@ -784,7 +1114,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Customer (optional)</label>
               <select
                 onChange={handleCustomerChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
                 value={watch("customer_id") || ""}
               >
                 <option value="">-- Select Customer --</option>
@@ -800,7 +1130,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Or Enter Customer Name</label>
               <input
                 {...register("customer_name")}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
                 placeholder="Customer name"
               />
             </div>
@@ -809,7 +1139,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Craftsman (optional)</label>
               <select
                 onChange={handleCraftsmanChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
                 value={watch("craftsman_id") || ""}
               >
                 <option value="">-- Select Craftsman --</option>
@@ -825,7 +1155,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <label className="block text-sm font-medium mb-1">Or Enter Craftsman Name</label>
               <input
                 {...register("craftsman_name")}
-                className="w-full border rounded p-2"
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
                 placeholder="Craftsman name"
               />
             </div>
@@ -836,8 +1166,12 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
                 type="file"
                 accept="image/*"
                 {...register("product_image")}
-                className="w-full border rounded p-2"
+                onChange={handleImageChange}
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
               />
+              {imagePreview && (
+                <img src={imagePreview} alt="Preview" className="mt-2 h-20 w-20 object-cover rounded" />
+              )}
             </div>
           </div>
 
@@ -846,17 +1180,17 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
             <h3 className="font-semibold mb-2">Diamonds</h3>
             <div className="space-y-2">
               {fields.map((field, index) => (
-                <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-2">
-                    <label className="block text-xs">Pcs</label>
+                <div key={field.id} className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 items-end">
+                  <div>
+                    <label className="block text-xs">Pcs *</label>
                     <input
                       type="number"
                       {...register(`diamonds.${index}.pcs` as const, { valueAsNumber: true, min: 1 })}
                       className="w-full border rounded p-1"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs">Carat</label>
+                  <div>
+                    <label className="block text-xs">Carat *</label>
                     <input
                       type="number"
                       step="0.01"
@@ -864,8 +1198,8 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
                       className="w-full border rounded p-1"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs">Rate</label>
+                  <div>
+                    <label className="block text-xs">Rate *</label>
                     <input
                       type="number"
                       step="0.01"
@@ -873,7 +1207,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
                       className="w-full border rounded p-1"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-xs">Type</label>
                     <input
                       {...register(`diamonds.${index}.type` as const)}
@@ -881,18 +1215,18 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
                       placeholder="Diamond"
                     />
                   </div>
-                  <div className="col-span-3">
-                    <label className="block text-xs">Packet No (opt)</label>
+                  <div className="col-span-1">
+                    <label className="block text-xs">Packet No</label>
                     <input
                       {...register(`diamonds.${index}.packet_no` as const)}
                       className="w-full border rounded p-1"
                     />
                   </div>
-                  <div className="col-span-1">
+                  <div>
                     <button
                       type="button"
                       onClick={() => remove(index)}
-                      className="text-red-500 hover:text-red-700 p-1"
+                      className="text-red-500 hover:text-red-700 p-1 mt-4"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -902,7 +1236,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               <button
                 type="button"
                 onClick={() => append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" })}
-                className="text-blue-600 text-sm flex items-center gap-1 mt-2"
+                className="text-indigo-600 text-sm flex items-center gap-1 mt-2 hover:text-indigo-700"
               >
                 <Plus size={16} /> Add Diamond
               </button>
@@ -910,56 +1244,93 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
           </div>
 
           {/* Gold & Pricing */}
-          <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Gold (g)</label>
-              <input
-                type="number"
-                step="0.01"
-                {...register("gold", { valueAsNumber: true })}
-                className="w-full border rounded p-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Gold Price (₹)</label>
-              <input
-                type="number"
-                step="0.01"
-                {...register("gold_price", { valueAsNumber: true })}
-                className="w-full border rounded p-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Labour Charge (₹)</label>
-              <input
-                type="number"
-                step="0.01"
-                {...register("labour_charge", { valueAsNumber: true })}
-                className="w-full border rounded p-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Profit Percent (%)</label>
-              <input
-                type="number"
-                step="0.01"
-                {...register("profit_percent", { valueAsNumber: true })}
-                className="w-full border rounded p-2"
-              />
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-3">Gold & Pricing</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Gold Weight (g)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register("gold", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Gold Carat</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register("gold_carat", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2"
+                  placeholder="22"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Gold Rate (₹/g)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register("gold_rate", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Gold Price (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register("gold_price", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2 bg-gray-50"
+                  placeholder="Auto-calculated"
+                />
+                <p className="text-xs text-gray-500 mt-1">Auto-calculated from weight × rate</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Labour Charge (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register("labour_charge", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Profit Percent (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register("profit_percent", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2"
+                  placeholder="0.00"
+                />
+              </div>
             </div>
           </div>
 
           {/* Form Actions */}
-          <div className="border-t pt-4 flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-100">
+          <div className="border-t pt-4 flex justify-end gap-2 sticky bottom-0 bg-white pb-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition">
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2"
             >
-              <Save size={16} /> {editingId ? "Update" : "Create"}
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save size={16} /> {editingId ? "Update" : "Create"}
+                </>
+              )}
             </button>
           </div>
         </form>
