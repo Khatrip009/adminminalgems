@@ -1,4 +1,4 @@
-// src/pages/ProductsPage.tsx
+// src/pages/masters/products/ProductsPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
@@ -39,7 +39,7 @@ import {
 } from "@/api/masters/products.api";
 import type { Category } from "@/api/masters/categories.api";
 import { fetchCategories } from "@/api/masters/categories.api";
-import { getAssetUrl } from "@/utils/assetUrl"; // ✅ import helper
+import { getAssetUrl } from "@/utils/assetUrl";
 
 const TRADE_TYPE_OPTIONS: { value: ProductTradeType | ""; label: string }[] = [
   { value: "", label: "All trade types" },
@@ -47,9 +47,6 @@ const TRADE_TYPE_OPTIONS: { value: ProductTradeType | ""; label: string }[] = [
   { value: "export", label: "Export" },
   { value: "both", label: "Both" },
 ];
-
-const PUBLIC_PRODUCT_BASE_PATH =
-  import.meta.env.VITE_PUBLIC_PRODUCT_BASE_PATH || "/products";
 
 interface ProductFormState {
   title: string;
@@ -123,6 +120,7 @@ const ProductsPage: React.FC = () => {
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [form, setForm] = useState<ProductFormState>(blankProductForm);
   const [saving, setSaving] = useState(false);
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetProduct, setAssetProduct] = useState<Product | null>(null);
@@ -193,6 +191,13 @@ const ProductsPage: React.FC = () => {
   useEffect(() => {
     loadProducts();
   }, [tradeType, categoryFilter, publishedFilter]);
+
+  // Scroll modal to top when opened
+  useEffect(() => {
+    if (modalOpen && modalContentRef.current) {
+      modalContentRef.current.scrollTop = 0;
+    }
+  }, [modalOpen]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,24 +274,18 @@ const ProductsPage: React.FC = () => {
 
       if (modalMode === "create") {
         const res = await createProductAdmin(payload);
-        console.debug("createProductAdmin response:", res);
         const createdProduct = (res && (res.product ?? res)) as Product | undefined;
         if (createdProduct) {
           setProducts((prev) => [createdProduct, ...prev]);
           setTotal((t) => t + 1);
-        } else {
-          console.warn("createProductAdmin returned no product field; reloading list.");
         }
         toast.success("Product created.");
         await loadProducts({ page: 1 });
       } else if (modalMode === "edit" && currentProduct) {
         const res = await updateProductAdmin(currentProduct.id, payload);
-        console.debug("updateProductAdmin response:", res);
         const updatedProduct = (res && (res.product ?? res)) as Product | undefined;
         if (updatedProduct) {
           setProducts((prev) => prev.map((p) => (p.id === currentProduct.id ? updatedProduct : p)));
-        } else {
-          console.warn("updateProductAdmin returned no product field; reloading list.");
         }
         toast.success("Product updated.");
         await loadProducts({ page });
@@ -706,11 +705,12 @@ const ProductsPage: React.FC = () => {
                         </button>
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
+                        {/* ✅ FIX: View button now opens admin detail page */}
                         <a
                           href={`/admin/products/${p.slug}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           <ExternalLink size={14} /> View
                         </a>
@@ -762,10 +762,13 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* CREATE / EDIT MODAL (unchanged) */}
+      {/* CREATE / EDIT MODAL with scroll to top */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div
+            ref={modalContentRef}
+            className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4"
+          >
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src="/minal_gems_logo.svg" className="h-10 w-auto" />
@@ -865,10 +868,10 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ASSET MODAL - with getAssetUrl */}
+      {/* ASSET MODAL */}
       {assetModalOpen && assetProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src="/minal_gems_logo.svg" className="h-10 w-auto" />
