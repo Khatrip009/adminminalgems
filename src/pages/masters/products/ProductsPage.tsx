@@ -707,7 +707,7 @@ const ProductsPage: React.FC = () => {
                       <td className="px-6 py-4 text-right space-x-2">
                         {/* ✅ FIX: View button now opens admin detail page */}
                         <a
-                          href={`/admin/products/${p.slug}`}
+                           href={`/admin/products/${p.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"

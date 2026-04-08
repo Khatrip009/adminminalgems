@@ -143,7 +143,7 @@ const App: React.FC = () => {
         {/* Masters */}
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="products" element={<ProductsPage />} />
-        <Route path="products/:slug" element={<ProductDetailPage />} />
+        <Route path="products/:id" element={<ProductDetailPage />} />
         <Route path="suppliers" element={<AdminSuppliersPage />} />
         <Route path="customers" element={<AdminCustomersPage />} />
         <Route path="craftsmen" element={<AdminCraftsmanPage />} />
