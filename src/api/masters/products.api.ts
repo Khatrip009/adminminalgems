@@ -70,6 +70,7 @@ export interface ProductAssetsResponse extends ApiResponse {
 ========================================================= */
 
 const BASE = `${API_ROUTES.masters}/products`;
+const ADMIN_BASE = `${BASE}/admin`;   // ✅ admin endpoints use /admin
 
 function buildQuery(params?: Record<string, any>) {
   if (!params) return "";
@@ -99,7 +100,7 @@ export async function fetchProductBySlug(slug: string): Promise<ProductResponse>
 }
 
 /* =========================================================
-   ADMIN PRODUCTS
+   ADMIN PRODUCTS (all use /admin prefix)
 ========================================================= */
 
 export interface FetchProductsAdminParams {
@@ -111,21 +112,32 @@ export interface FetchProductsAdminParams {
   limit?: number;
 }
 
-// GET /masters/products (admin filtered)
+// GET /masters/products/admin
 export async function fetchProductsAdmin(
   params: FetchProductsAdminParams = {}
 ): Promise<ProductsAdminListResponse> {
-  return apiFetch(
-    `${BASE}${buildQuery(params)}`
-  );
+  return apiFetch(`${ADMIN_BASE}${buildQuery(params)}`);
 }
 
-// GET /masters/products/:id
-export async function fetchProductAdmin(
-  id: string
-): Promise<ProductResponse> {
+// GET /masters/products/admin/:id
+export async function fetchProductAdmin(id: string): Promise<ProductResponse> {
   if (!id) throw new Error("product_id_required");
-  return apiFetch(`${BASE}/${encodeURIComponent(id)}`);
+  return apiFetch(`${ADMIN_BASE}/${encodeURIComponent(id)}`);
+}
+
+export interface CreateProductPayload {
+  title: string;
+  slug: string;
+  price: number;
+  currency?: string;
+  short_description?: string;
+  description?: string;
+  category_id?: string;
+  trade_type?: TradeType;
+  is_published?: boolean;
+  sku?: string | null;
+  available_qty?: number;
+  moq?: number;
 }
 
 // POST /masters/products
@@ -138,32 +150,44 @@ export async function createProductAdmin(
   });
 }
 
-// PUT /masters/products/:id
+export interface UpdateProductPayload {
+  title?: string;
+  slug?: string;
+  price?: number;
+  currency?: string;
+  short_description?: string;
+  description?: string;
+  category_id?: string;
+  trade_type?: TradeType;
+  is_published?: boolean;
+  sku?: string | null;
+  available_qty?: number;
+  moq?: number;
+  metadata?: any;
+}
+
+// PUT /masters/products/admin/:id
 export async function updateProductAdmin(
   id: string,
   payload: UpdateProductPayload
 ): Promise<ProductResponse> {
   if (!id) throw new Error("product_id_required");
-
-  return apiFetch(`${BASE}/${encodeURIComponent(id)}`, {
+  return apiFetch(`${ADMIN_BASE}/${encodeURIComponent(id)}`, {
     method: "PUT",
     body: payload,
   });
 }
 
-// DELETE /masters/products/:id
-export async function deleteProductAdmin(
-  id: string
-): Promise<ApiResponse> {
+// DELETE /masters/products/admin/:id
+export async function deleteProductAdmin(id: string): Promise<ApiResponse> {
   if (!id) throw new Error("product_id_required");
-
-  return apiFetch(`${BASE}/${encodeURIComponent(id)}`, {
+  return apiFetch(`${ADMIN_BASE}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }
 
 /* =========================================================
-   PRODUCT ASSETS
+   PRODUCT ASSETS (no /admin)
 ========================================================= */
 
 // GET /masters/products/:id/assets
@@ -171,10 +195,7 @@ export async function fetchProductAssets(
   productId: string
 ): Promise<ProductAssetsResponse> {
   if (!productId) throw new Error("product_id_required");
-
-  return apiFetch(
-    `${BASE}/${encodeURIComponent(productId)}/assets`
-  );
+  return apiFetch(`${BASE}/${encodeURIComponent(productId)}/assets`);
 }
 
 // POST /masters/products/:id/assets
@@ -183,14 +204,10 @@ export async function uploadProductAssets(
   formData: FormData
 ): Promise<ProductAssetsResponse> {
   if (!productId) throw new Error("product_id_required");
-
-  return apiFetch(
-    `${BASE}/${encodeURIComponent(productId)}/assets`,
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
+  return apiFetch(`${BASE}/${encodeURIComponent(productId)}/assets`, {
+    method: "POST",
+    body: formData,
+  });
 }
 
 // PATCH /masters/products/assets/:assetId/set-primary
@@ -198,21 +215,15 @@ export async function setPrimaryProductAsset(
   assetId: string
 ): Promise<ApiResponse & { asset?: ProductAsset }> {
   if (!assetId) throw new Error("asset_id_required");
-
-  return apiFetch(
-    `${BASE}/assets/${encodeURIComponent(assetId)}/set-primary`,
-    { method: "PATCH" }
-  );
+  return apiFetch(`${BASE}/assets/${encodeURIComponent(assetId)}/set-primary`, {
+    method: "PATCH",
+  });
 }
 
 // DELETE /masters/products/assets/:assetId
-export async function deleteProductAsset(
-  assetId: string
-): Promise<ApiResponse> {
+export async function deleteProductAsset(assetId: string): Promise<ApiResponse> {
   if (!assetId) throw new Error("asset_id_required");
-
-  return apiFetch(
-    `${BASE}/assets/${encodeURIComponent(assetId)}`,
-    { method: "DELETE" }
-  );
+  return apiFetch(`${BASE}/assets/${encodeURIComponent(assetId)}`, {
+    method: "DELETE",
+  });
 }
