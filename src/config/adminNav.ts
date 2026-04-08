@@ -1,3 +1,4 @@
+// src/config/adminNav.ts
 import type React from "react";
 import {
   LayoutDashboard,
@@ -41,9 +42,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   ========================= */
   {
     title: "Dashboard",
-    items: [
-      { label: "Overview", path: "/admin", icon: LayoutDashboard },
-    ],
+    items: [{ label: "Overview", path: "/admin", icon: LayoutDashboard }],
   },
 
   /* =========================
@@ -54,7 +53,8 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     items: [
       { label: "Categories", path: "/admin/categories", icon: Database },
       { label: "Products", path: "/admin/products", icon: Package },
-      { label: "Warehouses", path: "/admin/inventory/warehouses", icon: Store },
+      // Warehouse route not yet implemented – commented out
+      // { label: "Warehouses", path: "/admin/inventory/warehouses", icon: Store },
       { label: "Craftsmen", path: "/admin/craftsmen", icon: Users },
       { label: "Suppliers", path: "/admin/suppliers", icon: Store },
       { label: "Customers", path: "/admin/customers", icon: Users },
@@ -69,7 +69,8 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     items: [
       { label: "Purchase Orders", path: "/admin/purchase-orders", icon: FileText },
       { label: "Goods Receipt (GRN)", path: "/admin/grn", icon: Receipt },
-      { label: "Supplier Invoices", path: "/admin/supplier-invoices", icon: FileText },
+      // Supplier invoices and payments are linked from supplier detail pages
+      { label: "Supplier Invoices", path: "/admin/supplier-invoices", icon: FileText }, // matches route /admin/supplier-invoices/:id
       { label: "Supplier Payments", path: "/admin/supplier-payments", icon: CreditCard },
       { label: "Supplier Ledger", path: "/admin/supplier-ledger", icon: ClipboardList },
     ],
@@ -98,21 +99,19 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     ],
   },
 
- /* =========================
-   SALES
-========================= */
-{
-  title: "Sales",
-  items: [
-    { label: "Orders", path: "/admin/orders", icon: ShoppingBag },
-    { label: "Sales Items", path: "/admin/sales/items", icon: Receipt }, // ✅ NEW
-    { label: "Invoices", path: "/admin/invoices", icon: FileText },
-    { label: "Payments", path: "/admin/payments", icon: CreditCard },
-    { label: "Returns", path: "/admin/returns", icon: Receipt },
-    { label: "Settlements", path: "/admin/settlements", icon: ClipboardList },
-  ],
-},
-
+  /* =========================
+     SALES
+  ========================= */
+  {
+    title: "Sales",
+    items: [
+      { label: "Orders", path: "/admin/orders", icon: ShoppingBag },
+      { label: "Sales Items", path: "/admin/sales/items", icon: Receipt },
+      { label: "Payments", path: "/admin/payments", icon: CreditCard },
+      { label: "Returns", path: "/admin/returns", icon: Receipt },
+      { label: "Settlements", path: "/admin/settlements", icon: ClipboardList },
+    ],
+  },
 
   /* =========================
      LOGISTICS & EXPORTS
@@ -144,9 +143,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   ========================= */
   {
     title: "Reports",
-    items: [
-      { label: "Analytics", path: "/admin/analytics", icon: BarChart3 },
-    ],
+    items: [{ label: "Analytics", path: "/admin/analytics", icon: BarChart3 }],
   },
 
   /* =========================
@@ -158,7 +155,8 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
       { label: "Users", path: "/admin/users", icon: Users },
       { label: "Tax Rules", path: "/admin/settings/tax-rules", icon: Settings },
       { label: "My Profile", path: "/admin/profile", icon: User },
-      { label: "Change Password", path: "/admin/security/change-password", icon: Lock },
+      // Change password page not defined in App.tsx – uncomment when route added
+      // { label: "Change Password", path: "/admin/security/change-password", icon: Lock },
       { label: "Login Activity", path: "/admin/security/logins", icon: Clock },
       { label: "Security Alerts", path: "/admin/security/alerts", icon: ShieldAlert },
     ],
