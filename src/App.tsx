@@ -99,7 +99,6 @@ import AdminOrderDetailPage from "./pages/sales/orders/AdminOrderDetailPage";
 import AdminPromoCodesPage from "./pages/sales/promos/AdminPromoCodesPage";
 import Sales from "./pages/sales/Sales";
 
-
 /* =========================
    LOGISTICS
 ========================= */
@@ -190,10 +189,9 @@ const App: React.FC = () => {
 
         {/* Sales */}
         <Route path="orders" element={<AdminOrdersPage />} />
-         <Route path="orders/:id" element={<AdminOrderDetailPage />} />
-         <Route path="sales/items" element={<Sales />} /> {/* ✅ NEW */}
-         <Route path="promos" element={<AdminPromoCodesPage />} />
-
+        <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+        <Route path="sales/items" element={<Sales />} />
+        <Route path="promos" element={<AdminPromoCodesPage />} />
 
         {/* Logistics */}
         <Route path="exports" element={<ExportsPage />} />
