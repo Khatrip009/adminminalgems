@@ -113,18 +113,16 @@ import AdminShippingRulesPage from "./pages/logistics/shipping/AdminShippingRule
 import PrintCenterPage from "./pages/misc/PrintCenterPage";
 import NotFoundPage from "./pages/misc/NotFoundPage";
 
-/* ===================================================== */
-
 const App: React.FC = () => {
   return (
     <Routes>
-      {/* ================= PUBLIC ================= */}
+      {/* PUBLIC */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/return/request" element={<ReturnRequestPage />} />
       <Route path="/return/confirmation" element={<ReturnConfirmationPage />} />
       <Route path="/account/returns" element={<AccountReturnsPage />} />
 
-      {/* ================= ADMIN ================= */}
+      {/* ADMIN */}
       <Route
         path="/admin"
         element={
@@ -140,10 +138,11 @@ const App: React.FC = () => {
         <Route path="leads" element={<LeadsPage />} />
         <Route path="notifications" element={<NotificationsAdminPage />} />
 
-        {/* Masters */}
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="products" element={<ProductsPage />} />
+        {/* Masters – detail route MUST come before list route */}
         <Route path="products/:id" element={<ProductDetailPage />} />
+        <Route path="products" element={<ProductsPage />} />
+
+        <Route path="categories" element={<CategoriesPage />} />
         <Route path="suppliers" element={<AdminSuppliersPage />} />
         <Route path="customers" element={<AdminCustomersPage />} />
         <Route path="craftsmen" element={<AdminCraftsmanPage />} />
@@ -209,7 +208,7 @@ const App: React.FC = () => {
         <Route path="print" element={<PrintCenterPage />} />
       </Route>
 
-      {/* ================= FALLBACK ================= */}
+      {/* 404 */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

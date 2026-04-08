@@ -1,5 +1,6 @@
 // src/pages/masters/products/ProductsPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom"; // add this import at the top
 import {
   Search,
   Filter,
@@ -706,14 +707,15 @@ const ProductsPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
                         {/* ✅ FIX: View button now opens admin detail page */}
-                        <a
-                           href={`/admin/products/${p.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          <ExternalLink size={14} /> View
-                        </a>
+                        <Link
+                        to={`/admin/products/${p.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        <ExternalLink size={14} /> View
+                      </Link>
+
                         <button
                           onClick={() => openAssetsModal(p)}
                           className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
