@@ -707,7 +707,7 @@ const ProductsPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
                         <a
-                          href={`${PUBLIC_PRODUCT_BASE_PATH}/${p.slug}`}
+                          href={`/admin/products/${p.slug}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
