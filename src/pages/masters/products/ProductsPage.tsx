@@ -630,115 +630,145 @@ const ProductsPage: React.FC = () => {
         <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-base text-slate-800 dark:text-slate-200">
-              <thead className="bg-slate-100 text-sm uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                <tr>
-                  <th className="px-6 py-4">Product</th>
-                  <th className="px-6 py-4">Price</th>
-                  <th className="px-6 py-4">Category</th>
-                  <th className="px-6 py-4">Trade</th>
-                  <th className="px-6 py-4">Stock</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-lg">
-                      <Loader2 className="mx-auto animate-spin" />
-                      Loading...
-                    </td>
-                  </tr>
-                ) : products.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-lg">No products found</td>
-                  </tr>
-                ) : (
-                  products.map((p) => (
-                    <tr key={p.id} className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                              <Package size={16} />
-                            </span>
-                            <span className="font-medium">{p.title}</span>
-                          </div>
-                          {p.short_description && (
-                            <div className="ml-10 text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
-                              {p.short_description}
-                            </div>
-                          )}
-                          {p.sku && (
-                            <div className="ml-10 text-xs text-slate-400 dark:text-slate-500">
-                              SKU: {p.sku}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-base font-semibold">
-                          {p.currency} {Number(p.price).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
-                          {p.trade_type}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="font-medium">{p.available_qty ?? 0}</div>
-                        <div className="text-xs text-slate-500">units</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleTogglePublished(p)}
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-                            p.is_published
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
-                              : "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
-                          }`}
-                        >
-                          <CheckCircle2 size={14} />
-                          {p.is_published ? "Published" : "Draft"}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {/* ✅ FIX: View button now opens admin detail page */}
-                        <Link
-                        to={`/admin/products/${p.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        <ExternalLink size={14} /> View
-                      </Link>
-
-                        <button
-                          onClick={() => openAssetsModal(p)}
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-                        >
-                          <ImageIcon size={14} /> Assets
-                        </button>
-                        <button
-                          onClick={() => openEditModal(p)}
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-                        >
-                          <Edit2 size={14} /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p)}
-                          className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+             <thead className="bg-slate-100 text-sm uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+  <tr>
+    <th className="px-6 py-4">Image</th>          {/* ✅ New column */}
+    <th className="px-6 py-4">ID</th>             {/* ✅ New column */}
+    <th className="px-6 py-4">Product</th>
+    <th className="px-6 py-4">Price</th>
+    <th className="px-6 py-4">Category</th>
+    <th className="px-6 py-4">Trade</th>
+    <th className="px-6 py-4">Stock</th>
+    <th className="px-6 py-4">Status</th>
+    <th className="px-6 py-4 text-right">Actions</th>
+  </tr>
+</thead>
+<tbody>
+  {loading ? (
+    <tr>
+      <td colSpan={9} className="py-8 text-center text-lg">
+        <Loader2 className="mx-auto animate-spin" />
+        Loading...
+      </td>
+    </tr>
+  ) : products.length === 0 ? (
+    <tr>
+      <td colSpan={9} className="py-8 text-center text-lg">No products found</td>
+    </tr>
+  ) : (
+    products.map((p) => (
+      <tr key={p.id} className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+        {/* Image column */}
+        <td className="px-6 py-4">
+          {p.primary_image ? (
+            <img 
+              src={getAssetUrl(p.primary_image)} 
+              alt={p.title}
+              className="h-12 w-12 rounded object-cover"
+            />
+          ) : (
+            <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center">
+              <Package size={20} className="text-slate-400" />
+            </div>
+          )}
+        </td>
+        
+        {/* ID column */}
+        <td className="px-6 py-4 text-xs font-mono text-slate-500">
+          {p.id.slice(0, 8)}...
+        </td>
+        
+        {/* Product column (existing) */}
+        <td className="px-6 py-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{p.title}</span>
+            </div>
+            {p.short_description && (
+              <div className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
+                {p.short_description}
+              </div>
+            )}
+            {p.sku && (
+              <div className="text-xs text-slate-400 dark:text-slate-500">
+                SKU: {p.sku}
+              </div>
+            )}
+          </div>
+        </td>
+        
+        {/* Price column */}
+        <td className="px-6 py-4">
+          <div className="text-base font-semibold">
+            {p.currency} {Number(p.price).toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
+        </td>
+        
+        {/* Category */}
+        <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
+        
+        {/* Trade type */}
+        <td className="px-6 py-4">
+          <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+            {p.trade_type}
+          </span>
+        </td>
+        
+        {/* Stock */}
+        <td className="px-6 py-4 text-sm">
+          <div className="font-medium">{p.available_qty ?? 0}</div>
+          <div className="text-xs text-slate-500">units</div>
+        </td>
+        
+        {/* Status */}
+        <td className="px-6 py-4">
+          <button
+            onClick={() => handleTogglePublished(p)}
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+              p.is_published
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+                : "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+            }`}
+          >
+            <CheckCircle2 size={14} />
+            {p.is_published ? "Published" : "Draft"}
+          </button>
+        </td>
+        
+        {/* Actions */}
+        <td className="px-6 py-4 text-right space-x-2">
+          <Link
+            to={`/admin/products/${p.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <ExternalLink size={14} /> View
+          </Link>
+          <button
+            onClick={() => openAssetsModal(p)}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            <ImageIcon size={14} /> Assets
+          </button>
+          <button
+            onClick={() => openEditModal(p)}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            <Edit2 size={14} /> Edit
+          </button>
+          <button
+            onClick={() => handleDelete(p)}
+            className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
+          >
+            <Trash2 size={14} /> Delete
+          </button>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
             </table>
           </div>
 

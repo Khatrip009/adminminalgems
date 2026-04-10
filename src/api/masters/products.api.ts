@@ -25,7 +25,7 @@ export interface Product {
   created_at: string;
   updated_at: string;
   trade_type: TradeType;
-
+  primary_image?: string | null;   //
   meta_title?: string | null;
   meta_description?: string | null;
   canonical_url?: string | null;
