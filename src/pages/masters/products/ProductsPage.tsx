@@ -20,6 +20,10 @@ import {
   Star,
   ExternalLink,
   Video,
+  Diamond,
+  Gem,
+  PlusCircle,
+  Save as SaveIcon,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -50,6 +54,54 @@ const TRADE_TYPE_OPTIONS: { value: ProductTradeType | ""; label: string }[] = [
   { value: "both", label: "Both" },
 ];
 
+const METAL_TYPE_OPTIONS = [
+  { value: "gold", label: "Gold" },
+  { value: "platinum", label: "Platinum" },
+  { value: "silver", label: "Silver" },
+  { value: "other", label: "Other" },
+];
+
+const GOLD_CARAT_OPTIONS = [
+  { value: 9, label: "9K" },
+  { value: 14, label: "14K" },
+  { value: 18, label: "18K" },
+  { value: 22, label: "22K" },
+  { value: 24, label: "24K" },
+];
+
+const DIAMOND_TYPE_OPTIONS = [
+  "Diamond",
+  "Ruby",
+  "Emerald",
+  "Sapphire",
+  "Pearl",
+  "Onyx",
+  "Topaz",
+  "Amethyst",
+  "Other",
+];
+
+const DIAMOND_COLOR_OPTIONS = [
+  "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N",
+  "Yellow", "Pink", "Blue", "Green", "White", "Champagne",
+];
+
+const DIAMOND_CLARITY_OPTIONS = [
+  "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1", "I2", "I3",
+];
+
+interface DiamondEntry {
+  id: string; // temporary for UI
+  pcs: number;
+  type: string;
+  carat: number;
+  rate: number;
+  color: string;
+  clarity: string;
+  shape?: string;
+  packet_no?: string;
+}
+
 interface ProductFormState {
   title: string;
   slug: string;
@@ -63,6 +115,13 @@ interface ProductFormState {
   is_published: boolean;
   available_qty: number;
   moq: number;
+  // New fields
+  diamond_pcs: number;
+  diamond_carat: number;
+  rate: number;
+  diamonds: any[]; // JSON array
+  metal_type: string;
+  gold_carat: number;
 }
 
 const blankProductForm: ProductFormState = {
@@ -78,6 +137,12 @@ const blankProductForm: ProductFormState = {
   is_published: false,
   available_qty: 0,
   moq: 1,
+  diamond_pcs: 0,
+  diamond_carat: 0,
+  rate: 0,
+  diamonds: [],
+  metal_type: "gold",
+  gold_carat: 18,
 };
 
 function slugifyClient(value: string): string {
@@ -124,6 +189,22 @@ const ProductsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
+  // Diamond entries state for structured editing
+  const [diamondEntries, setDiamondEntries] = useState<DiamondEntry[]>([]);
+  const [diamondModalOpen, setDiamondModalOpen] = useState(false);
+  const [editingDiamondIndex, setEditingDiamondIndex] = useState<number | null>(null);
+  const [currentDiamond, setCurrentDiamond] = useState<DiamondEntry>({
+    id: "",
+    pcs: 1,
+    type: "Diamond",
+    carat: 0,
+    rate: 0,
+    color: "G",
+    clarity: "VS1",
+    shape: "Round",
+    packet_no: "",
+  });
+
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetProduct, setAssetProduct] = useState<Product | null>(null);
   const [assets, setAssets] = useState<ProductAsset[]>([]);
@@ -137,7 +218,22 @@ const ProductsPage: React.FC = () => {
 
   const pageCount = useMemo(() => (total > 0 ? Math.ceil(total / limit) : 1), [total, limit]);
 
-  // Main load function that accepts explicit page number
+  // Sync diamonds JSON with entries
+  useEffect(() => {
+    const diamondsForBackend = diamondEntries.map(({ id, ...rest }) => rest);
+    setForm((prev) => ({ ...prev, diamonds: diamondsForBackend }));
+    // Also update aggregated totals
+    const totalPcs = diamondEntries.reduce((sum, d) => sum + (d.pcs || 0), 0);
+    const totalCarat = diamondEntries.reduce((sum, d) => sum + (d.carat || 0), 0);
+    // rate is per carat average? we'll keep separate, but for now just sum carat*rate? Actually backend expects rate field separately.
+    // We'll keep the rate field as is (can be average)
+    setForm((prev) => ({
+      ...prev,
+      diamond_pcs: totalPcs,
+      diamond_carat: totalCarat,
+    }));
+  }, [diamondEntries]);
+
   async function loadProducts(targetPage?: number) {
     setLoading(true);
     try {
@@ -187,18 +283,15 @@ const ProductsPage: React.FC = () => {
     }
   }
 
-  // Initial load
   useEffect(() => {
     loadProducts(1);
     loadCategoriesForFilter();
   }, []);
 
-  // Reload when filters change (reset to page 1)
   useEffect(() => {
     loadProducts(1);
   }, [tradeType, categoryFilter, publishedFilter]);
 
-  // Scroll modal to top when opened
   useEffect(() => {
     if (modalOpen && modalContentRef.current) {
       modalContentRef.current.scrollTop = 0;
@@ -214,12 +307,29 @@ const ProductsPage: React.FC = () => {
     setModalMode("create");
     setCurrentProduct(null);
     setForm(blankProductForm);
+    setDiamondEntries([]);
     setModalOpen(true);
   };
 
   const openEditModal = (p: Product) => {
     setModalMode("edit");
     setCurrentProduct(p);
+    // Parse diamonds if exists
+    let parsedDiamonds: DiamondEntry[] = [];
+    if (p.diamonds && Array.isArray(p.diamonds)) {
+      parsedDiamonds = p.diamonds.map((d, idx) => ({
+        id: `edit-${idx}`,
+        pcs: d.pcs || 0,
+        type: d.type || "Diamond",
+        carat: d.carat || 0,
+        rate: d.rate || 0,
+        color: d.color || "G",
+        clarity: d.clarity || "VS1",
+        shape: d.shape || "Round",
+        packet_no: d.packet_no || "",
+      }));
+    }
+    setDiamondEntries(parsedDiamonds);
     setForm({
       title: p.title,
       slug: p.slug,
@@ -233,6 +343,12 @@ const ProductsPage: React.FC = () => {
       is_published: !!p.is_published,
       available_qty: Number(p.available_qty ?? 0),
       moq: Number(p.moq ?? 1),
+      diamond_pcs: p.diamond_pcs ?? 0,
+      diamond_carat: p.diamond_carat ?? 0,
+      rate: p.rate ?? 0,
+      diamonds: p.diamonds && Array.isArray(p.diamonds) ? p.diamonds : [],
+      metal_type: p.metal_type || "gold",
+      gold_carat: p.gold_carat ?? 18,
     });
     setModalOpen(true);
   };
@@ -276,6 +392,12 @@ const ProductsPage: React.FC = () => {
         is_published: form.is_published,
         available_qty: form.available_qty,
         moq: form.moq,
+        diamond_pcs: form.diamond_pcs,
+        diamond_carat: form.diamond_carat,
+        rate: form.rate,
+        diamonds: form.diamonds,
+        metal_type: form.metal_type,
+        gold_carat: form.gold_carat,
       };
 
       if (modalMode === "create") {
@@ -300,6 +422,7 @@ const ProductsPage: React.FC = () => {
       setModalOpen(false);
       setCurrentProduct(null);
       setForm(blankProductForm);
+      setDiamondEntries([]);
     } catch (err) {
       console.error("Failed to save product", err);
       toast.error("Failed to save product.");
@@ -336,7 +459,6 @@ const ProductsPage: React.FC = () => {
     assetsFileInputRef.current?.click();
   };
 
-  // Updated: detect file type (image or video) and set asset_type accordingly
   const handleAssetsFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !assetProduct) return;
@@ -344,24 +466,11 @@ const ProductsPage: React.FC = () => {
 
     setAssetsSaving(true);
     try {
-      // Group files by type? We'll upload each file individually or in one request.
-      // For simplicity, we upload all files in one FormData, but we need to send asset_type per file.
-      // However, the backend may accept a single asset_type for all files. To support mixed types,
-      // we must either send each file separately or extend the API. Here we'll send a single asset_type
-      // derived from the first file (or auto). Better: send each file as its own request, but that's slower.
-      // Alternative: API might support auto-detection if asset_type is omitted. We'll use "auto" if available.
-      // Since the original code forced "image", we now detect per file and send as part of metadata? 
-      // To keep it working with existing backend, we'll set asset_type to "auto" and rely on backend detection,
-      // or we can upload each file separately with correct type. Let's do separate uploads to be safe.
-      
       for (const file of files) {
         const fileFormData = new FormData();
         fileFormData.append("files", file);
-        // Determine asset type based on MIME type
         let assetType = "image";
-        if (file.type.startsWith("video/")) {
-          assetType = "video";
-        }
+        if (file.type.startsWith("video/")) assetType = "video";
         fileFormData.append("asset_type", assetType);
         fileFormData.append("is_primary", assets.length === 0 && files.indexOf(file) === 0 ? "true" : "false");
         fileFormData.append("sort_order", "0");
@@ -412,40 +521,97 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  const handleExportCsv = () => {
+  // Diamond management functions
+  const openAddDiamondModal = () => {
+    setEditingDiamondIndex(null);
+    setCurrentDiamond({
+      id: crypto.randomUUID(),
+      pcs: 1,
+      type: "Diamond",
+      carat: 0,
+      rate: 0,
+      color: "G",
+      clarity: "VS1",
+      shape: "Round",
+      packet_no: "",
+    });
+    setDiamondModalOpen(true);
+  };
+
+  const openEditDiamondModal = (idx: number) => {
+    setEditingDiamondIndex(idx);
+    setCurrentDiamond({ ...diamondEntries[idx] });
+    setDiamondModalOpen(true);
+  };
+
+  const saveDiamond = () => {
+    if (currentDiamond.pcs <= 0) {
+      toast.error("Pieces must be > 0");
+      return;
+    }
+    if (currentDiamond.carat <= 0) {
+      toast.error("Carat weight must be > 0");
+      return;
+    }
+    if (currentDiamond.rate <= 0) {
+      toast.error("Rate must be > 0");
+      return;
+    }
+    const newDiamond = { ...currentDiamond, id: currentDiamond.id || crypto.randomUUID() };
+    if (editingDiamondIndex !== null) {
+      const updated = [...diamondEntries];
+      updated[editingDiamondIndex] = newDiamond;
+      setDiamondEntries(updated);
+    } else {
+      setDiamondEntries([...diamondEntries, newDiamond]);
+    }
+    setDiamondModalOpen(false);
+  };
+
+  const removeDiamond = (idx: number) => {
+    if (window.confirm("Remove this gemstone?")) {
+      const updated = [...diamondEntries];
+      updated.splice(idx, 1);
+      setDiamondEntries(updated);
+    }
+  };
+
+  // Export CSV (all products or selected via query param? For now all products)
+  const handleExportCsv = async () => {
     if (!products.length) {
       toast("No products to export.", { icon: "ℹ️" });
       return;
     }
 
     const header = [
-      "title",
-      "slug",
-      "sku",
-      "price",
-      "currency",
-      "short_description",
-      "description",
-      "category_id",
-      "trade_type",
-      "is_published",
-      "available_qty",
-      "moq",
+      "id", "sku", "title", "slug", "description", "short_description",
+      "category_id", "price", "currency", "moq", "available_qty", "is_published",
+      "trade_type", "diamond_pcs", "diamond_carat", "rate", "diamonds",
+      "metal_type", "gold_carat", "created_at", "updated_at"
     ];
 
     const rows = products.map((p) => [
+      p.id,
+      p.sku ?? "",
       p.title ?? "",
       p.slug ?? "",
-      p.sku ?? "",
+      (p.description ?? "").replace(/"/g, '""'),
+      (p.short_description ?? "").replace(/"/g, '""'),
+      p.category_id ?? "",
       p.price ?? 0,
       p.currency ?? "INR",
-      (p.short_description ?? "").replace(/"/g, '""'),
-      (p.description ?? "").replace(/"/g, '""'),
-      p.category_id ?? "",
-      p.trade_type ?? "",
-      p.is_published ? "true" : "false",
-      p.available_qty ?? 0,
       p.moq ?? 0,
+      p.available_qty ?? 0,
+      p.is_published ? "true" : "false",
+      p.trade_type ?? "",
+      p.diamond_pcs ?? 0,
+      p.diamond_carat ?? 0,
+      p.rate ?? 0,
+      JSON.stringify(p.diamonds ?? []),
+      p.metal_type ?? "gold",
+      p.gold_carat ?? 18,
+      p.created_at,
+      p.updated_at,
     ]);
 
     const csvLines = [
@@ -487,44 +653,51 @@ const ProductsPage: React.FC = () => {
         return;
       }
 
-      const [, ...dataLines] = lines;
+      const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").trim());
+      const dataLines = lines.slice(1);
+
       let created = 0;
       let failed = 0;
 
       for (const line of dataLines) {
-        const cols = line.split(",");
-        const title = cols[0]?.replace(/^"|"$/g, "")?.trim();
-        if (!title) {
-          failed++;
-          continue;
-        }
-
-        const slug = cols[1]?.replace(/^"|"$/g, "")?.trim() || "";
-        const sku = cols[2]?.replace(/^"|"$/g, "").trim() || "";
-        const price = Number(cols[3] || 0);
-        const currency = cols[4]?.replace(/^"|"$/g, "").trim() || "INR";
-        const short_description = cols[5]?.replace(/^"|"$/g, "")?.replace(/""/g, '"') || "";
-        const description = cols[6]?.replace(/^"|"$/g, "")?.replace(/""/g, '"') || "";
-        const category_id = cols[7]?.replace(/^"|"$/g, "").trim() || "";
-        const trade_type = (cols[8]?.replace(/^"|"$/g, "").trim() as ProductTradeType) || "both";
-        const is_published = cols[9]?.replace(/^"|"$/g, "").trim().toLowerCase() === "true";
-        const available_qty = Number(cols[10] || 0);
-        const moq = Number(cols[11] || 0);
+        const values = line.split(",").map(v => v.replace(/^"|"$/g, "").trim());
+        const record: any = {};
+        headers.forEach((h, idx) => { record[h] = values[idx]; });
 
         try {
+          if (!record.title || !record.slug || record.price === undefined) {
+            failed++;
+            continue;
+          }
+
+          let diamondsArray = [];
+          if (record.diamonds) {
+            try {
+              diamondsArray = JSON.parse(record.diamonds);
+            } catch {
+              diamondsArray = [];
+            }
+          }
+
           await createProductAdmin({
-            title,
-            slug: slug || slugifyClient(title),
-            sku: sku || undefined,
-            price: Number.isNaN(price) ? 0 : price,
-            currency,
-            short_description: short_description || undefined,
-            description: description || undefined,
-            category_id: category_id || undefined,
-            trade_type,
-            is_published,
-            available_qty: Number.isNaN(available_qty) ? 0 : available_qty,
-            moq: Number.isNaN(moq) ? 0 : moq,
+            title: record.title,
+            slug: record.slug || slugifyClient(record.title),
+            sku: record.sku || undefined,
+            price: parseFloat(record.price) || 0,
+            currency: record.currency || "INR",
+            short_description: record.short_description || undefined,
+            description: record.description || undefined,
+            category_id: record.category_id || undefined,
+            trade_type: (record.trade_type as ProductTradeType) || "both",
+            is_published: record.is_published === "true",
+            available_qty: parseInt(record.available_qty) || 0,
+            moq: parseInt(record.moq) || 0,
+            diamond_pcs: parseInt(record.diamond_pcs) || 0,
+            diamond_carat: parseFloat(record.diamond_carat) || 0,
+            rate: parseFloat(record.rate) || 0,
+            diamonds: diamondsArray,
+            metal_type: record.metal_type || "gold",
+            gold_carat: parseFloat(record.gold_carat) || 18,
           });
           created++;
         } catch (err) {
@@ -802,22 +975,22 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* CREATE / EDIT MODAL with scroll to top */}
+      {/* CREATE / EDIT MODAL with structured diamond entries */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div
             ref={modalContentRef}
-            className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4"
+            className="w-full max-w-5xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4"
           >
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src="/minal_gems_logo.svg" className="h-10 w-auto" />
+                <img src="/minal_gems_logo.svg" className="h-10 w-auto" alt="logo" />
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                     {modalMode === "create" ? "Create Product" : "Edit Product"}
                   </h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Configure product details, pricing, and visibility for Minal Gems.
+                    Configure product details, pricing, gemstones, and metal.
                   </p>
                 </div>
               </div>
@@ -826,7 +999,7 @@ const ProductsPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-base">
+            <form onSubmit={handleSubmit} className="space-y-5 text-base">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Title *</label>
@@ -841,7 +1014,7 @@ const ProductsPage: React.FC = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Price *</label>
-                  <input type="number" required min={0} value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value || 0) }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
+                  <input type="number" required min={0} step="0.01" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value || 0) }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Currency</label>
@@ -884,6 +1057,98 @@ const ProductsPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Gemstone Details Section with Table */}
+              <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
+                    <Diamond size={18} /> Gemstones / Diamonds
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={openAddDiamondModal}
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                  >
+                    <PlusCircle size={14} /> Add Gemstone
+                  </button>
+                </div>
+
+                {diamondEntries.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/30">
+                    No gemstones added. Click "Add Gemstone" to specify diamonds or other stones.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-100 dark:bg-slate-800">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Type</th>
+                          <th className="px-3 py-2 text-left">Pcs</th>
+                          <th className="px-3 py-2 text-left">Carat</th>
+                          <th className="px-3 py-2 text-left">Rate</th>
+                          <th className="px-3 py-2 text-left">Color</th>
+                          <th className="px-3 py-2 text-left">Clarity</th>
+                          <th className="px-3 py-2 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diamondEntries.map((d, idx) => (
+                          <tr key={d.id} className="border-t border-slate-200 dark:border-slate-700">
+                            <td className="px-3 py-2">{d.type}</td>
+                            <td className="px-3 py-2">{d.pcs}</td>
+                            <td className="px-3 py-2">{d.carat}</td>
+                            <td className="px-3 py-2">{d.rate.toLocaleString()}</td>
+                            <td className="px-3 py-2">{d.color}</td>
+                            <td className="px-3 py-2">{d.clarity}</td>
+                            <td className="px-3 py-2 text-center space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => openEditDiamondModal(idx)}
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeDiamond(idx)}
+                                className="text-rose-600 hover:text-rose-800 dark:text-rose-400"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
+                  <div>Total Pcs: {diamondEntries.reduce((s, d) => s + d.pcs, 0)}</div>
+                  <div>Total Carat: {diamondEntries.reduce((s, d) => s + d.carat, 0).toFixed(3)}</div>
+                  <div>Avg Rate: {(diamondEntries.reduce((s, d) => s + (d.rate * d.carat), 0) / (diamondEntries.reduce((s, d) => s + d.carat, 0) || 1)).toFixed(2)}</div>
+                </div>
+              </div>
+
+              {/* Metal Details Section */}
+              <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+                <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
+                  <Gem size={18} /> Metal Details
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Metal Type</label>
+                    <select value={form.metal_type} onChange={(e) => setForm((f) => ({ ...f, metal_type: e.target.value }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                      {METAL_TYPE_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Gold Carat</label>
+                    <select value={form.gold_carat} onChange={(e) => setForm((f) => ({ ...f, gold_carat: Number(e.target.value) }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                      {GOLD_CARAT_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="mb-1 block text-sm font-medium">Short Description</label>
                 <textarea rows={2} value={form.short_description} onChange={(e) => setForm((f) => ({ ...f, short_description: e.target.value }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
@@ -908,7 +1173,77 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ASSET MODAL - now supports images and videos */}
+      {/* Diamond/Gemstone Entry Modal */}
+      {diamondModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                {editingDiamondIndex !== null ? "Edit Gemstone" : "Add Gemstone"}
+              </h3>
+              <button onClick={() => setDiamondModalOpen(false)} className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Type</label>
+                <select
+                  value={currentDiamond.type}
+                  onChange={(e) => setCurrentDiamond({ ...currentDiamond, type: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                >
+                  {DIAMOND_TYPE_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Pieces</label>
+                  <input type="number" min={1} value={currentDiamond.pcs} onChange={(e) => setCurrentDiamond({ ...currentDiamond, pcs: Number(e.target.value) })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Carat (ct)</label>
+                  <input type="number" min={0} step={0.001} value={currentDiamond.carat} onChange={(e) => setCurrentDiamond({ ...currentDiamond, carat: Number(e.target.value) })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Rate (per carat)</label>
+                <input type="number" min={0} step={0.01} value={currentDiamond.rate} onChange={(e) => setCurrentDiamond({ ...currentDiamond, rate: Number(e.target.value) })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Color</label>
+                  <select value={currentDiamond.color} onChange={(e) => setCurrentDiamond({ ...currentDiamond, color: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                    {DIAMOND_COLOR_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Clarity</label>
+                  <select value={currentDiamond.clarity} onChange={(e) => setCurrentDiamond({ ...currentDiamond, clarity: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                    {DIAMOND_CLARITY_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Shape (optional)</label>
+                <input type="text" value={currentDiamond.shape || ""} onChange={(e) => setCurrentDiamond({ ...currentDiamond, shape: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="e.g., Round, Princess, Emerald" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Packet No. (optional)</label>
+                <input type="text" value={currentDiamond.packet_no || ""} onChange={(e) => setCurrentDiamond({ ...currentDiamond, packet_no: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setDiamondModalOpen(false)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 dark:border-slate-700">Cancel</button>
+              <button onClick={saveDiamond} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900">
+                <SaveIcon size={14} className="inline mr-1" /> Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ASSET MODAL - unchanged */}
       {assetModalOpen && assetProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4">
@@ -937,7 +1272,6 @@ const ProductsPage: React.FC = () => {
                   {assetsSaving ? <Loader2 className="animate-spin" size={16} /> : <ImagePlus size={16} />}
                   Upload Media
                 </button>
-                {/* Updated file input to accept both images and videos */}
                 <input
                   ref={assetsFileInputRef}
                   type="file"

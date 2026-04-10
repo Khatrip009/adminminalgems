@@ -25,11 +25,18 @@ export interface Product {
   created_at: string;
   updated_at: string;
   trade_type: TradeType;
-  primary_image?: string | null;   //
+  primary_image?: string | null;
   meta_title?: string | null;
   meta_description?: string | null;
   canonical_url?: string | null;
   og_image?: string | null;
+  // New gemstone/metal fields
+  diamond_pcs: number;
+  diamond_carat: number;
+  rate: number;
+  diamonds: any[]; // JSON array of gemstone objects
+  metal_type: string; // e.g., 'gold', 'platinum'
+  gold_carat: number; // e.g., 18, 22
 }
 
 export interface ProductAsset {
@@ -70,7 +77,7 @@ export interface ProductAssetsResponse extends ApiResponse {
 ========================================================= */
 
 const BASE = `${API_ROUTES.masters}/products`;
-const ADMIN_BASE = `${BASE}/admin`;   // ✅ admin endpoints use /admin
+const ADMIN_BASE = `${BASE}/admin`;
 
 function buildQuery(params?: Record<string, any>) {
   if (!params) return "";
@@ -138,6 +145,13 @@ export interface CreateProductPayload {
   sku?: string | null;
   available_qty?: number;
   moq?: number;
+  // New fields
+  diamond_pcs?: number;
+  diamond_carat?: number;
+  rate?: number;
+  diamonds?: any[];
+  metal_type?: string;
+  gold_carat?: number;
 }
 
 // POST /masters/products
@@ -164,6 +178,13 @@ export interface UpdateProductPayload {
   available_qty?: number;
   moq?: number;
   metadata?: any;
+  // New fields
+  diamond_pcs?: number;
+  diamond_carat?: number;
+  rate?: number;
+  diamonds?: any[];
+  metal_type?: string;
+  gold_carat?: number;
 }
 
 // PUT /masters/products/admin/:id
