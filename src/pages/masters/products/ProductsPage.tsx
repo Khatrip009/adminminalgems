@@ -1,6 +1,6 @@
 // src/pages/masters/products/ProductsPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom"; // add this import at the top
+import { Link } from "react-router-dom";
 import {
   Search,
   Filter,
@@ -136,20 +136,22 @@ const ProductsPage: React.FC = () => {
 
   const pageCount = useMemo(() => (total > 0 ? Math.ceil(total / limit) : 1), [total, limit]);
 
-  async function loadProducts(opts?: { keepPage?: boolean }) {
+  // Main load function that accepts explicit page number
+  async function loadProducts(targetPage?: number) {
     setLoading(true);
     try {
+      const pageToFetch = targetPage !== undefined ? targetPage : 1;
       const res = await fetchProductsAdmin({
         q,
         category_id: categoryFilter || undefined,
         trade_type: tradeType || undefined,
         is_published: publishedFilter === "" ? undefined : publishedFilter === "true" ? true : false,
-        page: opts?.keepPage ? page : 1,
+        page: pageToFetch,
         limit,
       });
       setProducts(res.products || []);
       setTotal(res.total || 0);
-      if (!opts?.keepPage) setPage(res.page || 1);
+      setPage(res.page || pageToFetch);
     } catch (err) {
       console.error("Failed to load products", err);
       toast.error("Failed to load products.");
@@ -184,13 +186,15 @@ const ProductsPage: React.FC = () => {
     }
   }
 
+  // Initial load
   useEffect(() => {
-    loadProducts();
+    loadProducts(1);
     loadCategoriesForFilter();
   }, []);
 
+  // Reload when filters change (reset to page 1)
   useEffect(() => {
-    loadProducts();
+    loadProducts(1);
   }, [tradeType, categoryFilter, publishedFilter]);
 
   // Scroll modal to top when opened
@@ -202,7 +206,7 @@ const ProductsPage: React.FC = () => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    loadProducts();
+    loadProducts(1);
   };
 
   const openCreateModal = () => {
@@ -281,7 +285,7 @@ const ProductsPage: React.FC = () => {
           setTotal((t) => t + 1);
         }
         toast.success("Product created.");
-        await loadProducts({ page: 1 });
+        await loadProducts(1);
       } else if (modalMode === "edit" && currentProduct) {
         const res = await updateProductAdmin(currentProduct.id, payload);
         const updatedProduct = (res && (res.product ?? res)) as Product | undefined;
@@ -289,7 +293,7 @@ const ProductsPage: React.FC = () => {
           setProducts((prev) => prev.map((p) => (p.id === currentProduct.id ? updatedProduct : p)));
         }
         toast.success("Product updated.");
-        await loadProducts({ page });
+        await loadProducts(page);
       }
 
       setModalOpen(false);
@@ -513,7 +517,7 @@ const ProductsPage: React.FC = () => {
       const summary = `Import completed. Created: ${created}, Failed: ${failed}.`;
       setImportSummary(summary);
       toast.success("Products CSV import completed.");
-      await loadProducts();
+      await loadProducts(1);
     } catch (err) {
       console.error("Failed to import products CSV", err);
       const msg = "Failed to import CSV. Check console for details.";
@@ -617,7 +621,7 @@ const ProductsPage: React.FC = () => {
             </select>
 
             <button
-              onClick={() => loadProducts({ keepPage: true })}
+              onClick={() => loadProducts(page)}
               disabled={loading}
               className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
@@ -630,145 +634,145 @@ const ProductsPage: React.FC = () => {
         <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-base text-slate-800 dark:text-slate-200">
-             <thead className="bg-slate-100 text-sm uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-  <tr>
-    <th className="px-6 py-4">Image</th>          {/* ✅ New column */}
-    <th className="px-6 py-4">ID</th>             {/* ✅ New column */}
-    <th className="px-6 py-4">Product</th>
-    <th className="px-6 py-4">Price</th>
-    <th className="px-6 py-4">Category</th>
-    <th className="px-6 py-4">Trade</th>
-    <th className="px-6 py-4">Stock</th>
-    <th className="px-6 py-4">Status</th>
-    <th className="px-6 py-4 text-right">Actions</th>
-  </tr>
-</thead>
-<tbody>
-  {loading ? (
-    <tr>
-      <td colSpan={9} className="py-8 text-center text-lg">
-        <Loader2 className="mx-auto animate-spin" />
-        Loading...
-      </td>
-    </tr>
-  ) : products.length === 0 ? (
-    <tr>
-      <td colSpan={9} className="py-8 text-center text-lg">No products found</td>
-    </tr>
-  ) : (
-    products.map((p) => (
-      <tr key={p.id} className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-        {/* Image column */}
-        <td className="px-6 py-4">
-          {p.primary_image ? (
-            <img 
-              src={getAssetUrl(p.primary_image)} 
-              alt={p.title}
-              className="h-12 w-12 rounded object-cover"
-            />
-          ) : (
-            <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center">
-              <Package size={20} className="text-slate-400" />
-            </div>
-          )}
-        </td>
-        
-        {/* ID column */}
-        <td className="px-6 py-4 text-xs font-mono text-slate-500">
-          {p.id.slice(0, 8)}...
-        </td>
-        
-        {/* Product column (existing) */}
-        <td className="px-6 py-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{p.title}</span>
-            </div>
-            {p.short_description && (
-              <div className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
-                {p.short_description}
-              </div>
-            )}
-            {p.sku && (
-              <div className="text-xs text-slate-400 dark:text-slate-500">
-                SKU: {p.sku}
-              </div>
-            )}
-          </div>
-        </td>
-        
-        {/* Price column */}
-        <td className="px-6 py-4">
-          <div className="text-base font-semibold">
-            {p.currency} {Number(p.price).toLocaleString()}
-          </div>
-          <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
-        </td>
-        
-        {/* Category */}
-        <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
-        
-        {/* Trade type */}
-        <td className="px-6 py-4">
-          <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
-            {p.trade_type}
-          </span>
-        </td>
-        
-        {/* Stock */}
-        <td className="px-6 py-4 text-sm">
-          <div className="font-medium">{p.available_qty ?? 0}</div>
-          <div className="text-xs text-slate-500">units</div>
-        </td>
-        
-        {/* Status */}
-        <td className="px-6 py-4">
-          <button
-            onClick={() => handleTogglePublished(p)}
-            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-              p.is_published
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
-                : "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
-            }`}
-          >
-            <CheckCircle2 size={14} />
-            {p.is_published ? "Published" : "Draft"}
-          </button>
-        </td>
-        
-        {/* Actions */}
-        <td className="px-6 py-4 text-right space-x-2">
-          <Link
-            to={`/admin/products/${p.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            <ExternalLink size={14} /> View
-          </Link>
-          <button
-            onClick={() => openAssetsModal(p)}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-          >
-            <ImageIcon size={14} /> Assets
-          </button>
-          <button
-            onClick={() => openEditModal(p)}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-          >
-            <Edit2 size={14} /> Edit
-          </button>
-          <button
-            onClick={() => handleDelete(p)}
-            className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
-          >
-            <Trash2 size={14} /> Delete
-          </button>
-        </td>
-      </tr>
-    ))
-  )}
-</tbody>
+              <thead className="bg-slate-100 text-sm uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <tr>
+                  <th className="px-6 py-4">Image</th>
+                  <th className="px-6 py-4">ID</th>
+                  <th className="px-6 py-4">Product</th>
+                  <th className="px-6 py-4">Price</th>
+                  <th className="px-6 py-4">Category</th>
+                  <th className="px-6 py-4">Trade</th>
+                  <th className="px-6 py-4">Stock</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-lg">
+                      <Loader2 className="mx-auto animate-spin" />
+                      Loading...
+                    </td>
+                  </tr>
+                ) : products.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-lg">No products found</td>
+                  </tr>
+                ) : (
+                  products.map((p) => (
+                    <tr key={p.id} className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                      {/* Image column */}
+                      <td className="px-6 py-4">
+                        {p.primary_image ? (
+                          <img
+                            src={getAssetUrl(p.primary_image)}
+                            alt={p.title}
+                            className="h-12 w-12 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center">
+                            <Package size={20} className="text-slate-400" />
+                          </div>
+                        )}
+                      </td>
+
+                      {/* ID column */}
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                        {p.id.slice(0, 8)}...
+                      </td>
+
+                      {/* Product column */}
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.title}</span>
+                          </div>
+                          {p.short_description && (
+                            <div className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
+                              {p.short_description}
+                            </div>
+                          )}
+                          {p.sku && (
+                            <div className="text-xs text-slate-400 dark:text-slate-500">
+                              SKU: {p.sku}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Price column */}
+                      <td className="px-6 py-4">
+                        <div className="text-base font-semibold">
+                          {p.currency} {Number(p.price).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
+
+                      {/* Trade type */}
+                      <td className="px-6 py-4">
+                        <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+                          {p.trade_type}
+                        </span>
+                      </td>
+
+                      {/* Stock */}
+                      <td className="px-6 py-4 text-sm">
+                        <div className="font-medium">{p.available_qty ?? 0}</div>
+                        <div className="text-xs text-slate-500">units</div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleTogglePublished(p)}
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+                            p.is_published
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+                              : "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                          }`}
+                        >
+                          <CheckCircle2 size={14} />
+                          {p.is_published ? "Published" : "Draft"}
+                        </button>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-6 py-4 text-right space-x-2">
+                        <Link
+                          to={`/admin/products/${p.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          <ExternalLink size={14} /> View
+                        </Link>
+                        <button
+                          onClick={() => openAssetsModal(p)}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
+                          <ImageIcon size={14} /> Assets
+                        </button>
+                        <button
+                          onClick={() => openEditModal(p)}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
+                          <Edit2 size={14} /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p)}
+                          className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-100 dark:border-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
             </table>
           </div>
 
@@ -777,14 +781,22 @@ const ProductsPage: React.FC = () => {
             <div className="space-x-2">
               <button
                 disabled={page <= 1 || loading}
-                onClick={() => { if (page <= 1) return; setPage((p) => p - 1); loadProducts({ keepPage: false }); }}
+                onClick={() => {
+                  const newPage = page - 1;
+                  if (newPage < 1) return;
+                  loadProducts(newPage);
+                }}
                 className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
               >
                 Previous
               </button>
               <button
                 disabled={page >= pageCountValue || loading}
-                onClick={() => { if (page >= pageCountValue) return; setPage((p) => p + 1); loadProducts({ keepPage: false }); }}
+                onClick={() => {
+                  const newPage = page + 1;
+                  if (newPage > pageCountValue) return;
+                  loadProducts(newPage);
+                }}
                 className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
               >
                 Next
