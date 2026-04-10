@@ -49,7 +49,7 @@ const tradeTypeOptions: { value: TradeType; label: string }[] = [
 ];
 
 const ProductDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>(); // ✅ changed from slug to id
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -76,6 +76,15 @@ const ProductDetailPage: React.FC = () => {
     return `${PUBLIC_SITE_BASE}/products/${product.slug}`;
   }, [product]);
 
+  // ✅ Compute primary image URL from assets for the preview modal
+  const primaryImageUrl = useMemo(() => {
+    const primaryAsset = assets.find(a => a.is_primary);
+    if (primaryAsset) return getAssetUrl(primaryAsset.url);
+    const firstImage = assets.find(a => a.asset_type === 'image');
+    if (firstImage) return getAssetUrl(firstImage.url);
+    return null;
+  }, [assets]);
+
   useEffect(() => {
     if (!id) {
       setLoading(false);
@@ -87,7 +96,6 @@ const ProductDetailPage: React.FC = () => {
     async function loadAll() {
       setLoading(true);
       try {
-        // ✅ fetch product by ID (admin endpoint)
         const prodRes = await fetchProductAdmin(id);
         if (cancelled) return;
 
@@ -103,7 +111,6 @@ const ProductDetailPage: React.FC = () => {
         setProduct(p);
         setForm(p);
 
-        // load categories
         setCategoriesLoading(true);
         try {
           const r = await fetchCategories({ limit: 500, include_counts: false });
@@ -115,7 +122,6 @@ const ProductDetailPage: React.FC = () => {
           setCategoriesLoading(false);
         }
 
-        // load assets
         setAssetsLoading(true);
         try {
           const ares = await fetchProductAssets(p.id);
@@ -793,7 +799,12 @@ const ProductDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <ProductPreviewModal product={{ ...product, assets }} open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      {/* ✅ Fixed: Pass computed primary_image URL */}
+      <ProductPreviewModal
+        product={{ ...product, primary_image: primaryImageUrl, assets }}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+      />
     </div>
   );
 };

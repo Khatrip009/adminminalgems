@@ -19,6 +19,7 @@ import {
   Trash,
   Star,
   ExternalLink,
+  Video,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -335,6 +336,7 @@ const ProductsPage: React.FC = () => {
     assetsFileInputRef.current?.click();
   };
 
+  // Updated: detect file type (image or video) and set asset_type accordingly
   const handleAssetsFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !assetProduct) return;
@@ -342,16 +344,33 @@ const ProductsPage: React.FC = () => {
 
     setAssetsSaving(true);
     try {
-      const formData = new FormData();
-      files.forEach((file) => formData.append("files", file));
-      formData.append("asset_type", "image");
-      formData.append("is_primary", assets.length === 0 ? "true" : "false");
-      formData.append("sort_order", "0");
-      formData.append("metadata", JSON.stringify({}));
+      // Group files by type? We'll upload each file individually or in one request.
+      // For simplicity, we upload all files in one FormData, but we need to send asset_type per file.
+      // However, the backend may accept a single asset_type for all files. To support mixed types,
+      // we must either send each file separately or extend the API. Here we'll send a single asset_type
+      // derived from the first file (or auto). Better: send each file as its own request, but that's slower.
+      // Alternative: API might support auto-detection if asset_type is omitted. We'll use "auto" if available.
+      // Since the original code forced "image", we now detect per file and send as part of metadata? 
+      // To keep it working with existing backend, we'll set asset_type to "auto" and rely on backend detection,
+      // or we can upload each file separately with correct type. Let's do separate uploads to be safe.
+      
+      for (const file of files) {
+        const fileFormData = new FormData();
+        fileFormData.append("files", file);
+        // Determine asset type based on MIME type
+        let assetType = "image";
+        if (file.type.startsWith("video/")) {
+          assetType = "video";
+        }
+        fileFormData.append("asset_type", assetType);
+        fileFormData.append("is_primary", assets.length === 0 && files.indexOf(file) === 0 ? "true" : "false");
+        fileFormData.append("sort_order", "0");
+        fileFormData.append("metadata", JSON.stringify({}));
 
-      const res = await uploadProductAssets(assetProduct.id, formData);
-      setAssets((prev) => [...prev, ...(res.assets || [])]);
-      toast.success("Assets uploaded.");
+        const res = await uploadProductAssets(assetProduct.id, fileFormData);
+        setAssets((prev) => [...prev, ...(res.assets || [])]);
+      }
+      toast.success("Media uploaded.");
     } catch (err) {
       console.error("Failed to upload product assets", err);
       toast.error("Failed to upload assets.");
@@ -662,7 +681,6 @@ const ProductsPage: React.FC = () => {
                 ) : (
                   products.map((p) => (
                     <tr key={p.id} className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-                      {/* Image column */}
                       <td className="px-6 py-4">
                         {p.primary_image ? (
                           <img
@@ -676,13 +694,7 @@ const ProductsPage: React.FC = () => {
                           </div>
                         )}
                       </td>
-
-                      {/* ID column */}
-                      <td className="px-6 py-4 text-xs font-mono text-slate-500">
-                        {p.id.slice(0, 8)}...
-                      </td>
-
-                      {/* Product column */}
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">{p.id.slice(0, 8)}...</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
@@ -693,39 +705,25 @@ const ProductsPage: React.FC = () => {
                               {p.short_description}
                             </div>
                           )}
-                          {p.sku && (
-                            <div className="text-xs text-slate-400 dark:text-slate-500">
-                              SKU: {p.sku}
-                            </div>
-                          )}
+                          {p.sku && <div className="text-xs text-slate-400 dark:text-slate-500">SKU: {p.sku}</div>}
                         </div>
                       </td>
-
-                      {/* Price column */}
                       <td className="px-6 py-4">
                         <div className="text-base font-semibold">
                           {p.currency} {Number(p.price).toLocaleString()}
                         </div>
                         <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
                       </td>
-
-                      {/* Category */}
                       <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
-
-                      {/* Trade type */}
                       <td className="px-6 py-4">
                         <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
                           {p.trade_type}
                         </span>
                       </td>
-
-                      {/* Stock */}
                       <td className="px-6 py-4 text-sm">
                         <div className="font-medium">{p.available_qty ?? 0}</div>
                         <div className="text-xs text-slate-500">units</div>
                       </td>
-
-                      {/* Status */}
                       <td className="px-6 py-4">
                         <button
                           onClick={() => handleTogglePublished(p)}
@@ -739,8 +737,6 @@ const ProductsPage: React.FC = () => {
                           {p.is_published ? "Published" : "Draft"}
                         </button>
                       </td>
-
-                      {/* Actions */}
                       <td className="px-6 py-4 text-right space-x-2">
                         <Link
                           to={`/admin/products/${p.id}`}
@@ -912,7 +908,7 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ASSET MODAL */}
+      {/* ASSET MODAL - now supports images and videos */}
       {assetModalOpen && assetProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4">
@@ -920,9 +916,9 @@ const ProductsPage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <img src="/minal_gems_logo.svg" className="h-10 w-auto" />
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Manage Assets</h2>
+                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Manage Media</h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Upload images or manage gallery for: <span className="font-semibold">{assetProduct.title}</span>
+                    Upload images or videos for: <span className="font-semibold">{assetProduct.title}</span>
                   </p>
                 </div>
               </div>
@@ -934,14 +930,22 @@ const ProductsPage: React.FC = () => {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <ImageIcon size={16} />
-                <span>Primary image is used on listing cards and detail page previews.</span>
+                <span>Primary media is used on listing cards and detail page previews.</span>
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={handleAssetsUploadClick} disabled={assetsSaving} className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                   {assetsSaving ? <Loader2 className="animate-spin" size={16} /> : <ImagePlus size={16} />}
-                  Upload Images
+                  Upload Media
                 </button>
-                <input ref={assetsFileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleAssetsFileChange} />
+                {/* Updated file input to accept both images and videos */}
+                <input
+                  ref={assetsFileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleAssetsFileChange}
+                />
               </div>
             </div>
 
@@ -949,25 +953,28 @@ const ProductsPage: React.FC = () => {
               {assetsLoading ? (
                 <div className="flex flex-col items-center justify-center py-10 text-slate-500 dark:text-slate-400">
                   <Loader2 className="mb-2 animate-spin" size={20} />
-                  Loading assets...
+                  Loading media...
                 </div>
               ) : assets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-slate-500 dark:text-slate-400">
                   <ImageIcon size={24} className="mb-2" />
-                  <p>No assets uploaded yet.</p>
+                  <p>No media uploaded yet.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                   {assets.map((asset) => {
                     const isImage = asset.asset_type === "image";
+                    const isVideo = asset.asset_type === "video";
                     return (
                       <div key={asset.id} className="flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950">
                         <div className="relative h-40 w-full bg-slate-100 dark:bg-slate-900">
                           {isImage ? (
                             <img src={getAssetUrl(asset.url)} alt={asset.filename || ""} className="h-full w-full object-cover" />
+                          ) : isVideo ? (
+                            <video src={getAssetUrl(asset.url)} className="h-full w-full object-cover" controls muted />
                           ) : (
                             <div className="flex h-full items-center justify-center text-slate-500 dark:text-slate-400">
-                              <ImageIcon size={24} />
+                              <Video size={32} />
                             </div>
                           )}
                           {asset.is_primary && (
@@ -977,7 +984,7 @@ const ProductsPage: React.FC = () => {
                           )}
                         </div>
                         <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                          <div className="flex-1 truncate text-slate-600 dark:text-slate-300">{asset.filename || "Image"}</div>
+                          <div className="flex-1 truncate text-slate-600 dark:text-slate-300">{asset.filename || "Media"}</div>
                         </div>
                         <div className="flex items-center justify-between gap-2 px-3 pb-3 text-xs">
                           <button onClick={() => handleSetPrimaryAsset(asset)} className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-2 py-1 text-[11px] font-medium hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800">
