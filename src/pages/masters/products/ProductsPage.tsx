@@ -24,6 +24,7 @@ import {
   Gem,
   PlusCircle,
   Save as SaveIcon,
+  Eye,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -49,7 +50,7 @@ import { getAssetUrl } from "@/utils/assetUrl";
 
 // Helper to get full API URL for raw fetch
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
-const getFullApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+const getFullApiUrl = (relativePath: string) => `${API_BASE_URL}${relativePath}`;
 
 const TRADE_TYPE_OPTIONS: { value: ProductTradeType | ""; label: string }[] = [
   { value: "", label: "All trade types" },
@@ -185,6 +186,10 @@ const ProductsPage: React.FC = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+
+  // Modal for viewing diamonds
+  const [viewDiamondsOpen, setViewDiamondsOpen] = useState(false);
+  const [viewingDiamonds, setViewingDiamonds] = useState<any[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
@@ -520,6 +525,7 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Diamond management functions
   const openAddDiamondModal = () => {
     setEditingDiamondIndex(null);
     setCurrentDiamond({
@@ -574,6 +580,7 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Selection handlers
   const toggleSelectProduct = (productId: string) => {
     const newSet = new Set(selectedProductIds);
     if (newSet.has(productId)) {
@@ -592,7 +599,7 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // ✅ Fixed export handlers using full API URL
+  // Export handlers (corrected URL)
   const handleExportAll = async () => {
     if (!products.length) {
       toast("No products to export.", { icon: "ℹ️" });
@@ -600,11 +607,9 @@ const ProductsPage: React.FC = () => {
     }
     try {
       const token = localStorage.getItem("token");
-      const url = getFullApiUrl(`/api/masters/products/export?format=csv`);
+      const url = getFullApiUrl(`/masters/products/export?format=csv`);
       const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
@@ -624,11 +629,9 @@ const ProductsPage: React.FC = () => {
     const ids = Array.from(selectedProductIds).join(",");
     try {
       const token = localStorage.getItem("token");
-      const url = getFullApiUrl(`/api/masters/products/export?format=csv&ids=${ids}`);
+      const url = getFullApiUrl(`/masters/products/export?format=csv&ids=${ids}`);
       const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
@@ -640,6 +643,7 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Import handlers
   const handleImportClick = () => {
     setImportSummary(null);
     csvFileInputRef.current?.click();
@@ -855,6 +859,11 @@ const ProductsPage: React.FC = () => {
                   <th className="px-6 py-4">Price</th>
                   <th className="px-6 py-4">Category</th>
                   <th className="px-6 py-4">Trade</th>
+                  <th className="px-6 py-4">Diamond Pcs</th>
+                  <th className="px-6 py-4">Diamond Carat</th>
+                  <th className="px-6 py-4">Metal Type</th>
+                  <th className="px-6 py-4">Gold Carat</th>
+                  <th className="px-6 py-4">Stones</th>
                   <th className="px-6 py-4">Stock</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -863,14 +872,14 @@ const ProductsPage: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-lg">
+                    <td colSpan={15} className="py-8 text-center text-lg">
                       <Loader2 className="mx-auto animate-spin" />
                       Loading...
                     </td>
                   </tr>
                 ) : products.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-lg">No products found</td>
+                    <td colSpan={15} className="py-8 text-center text-lg">No products found</td>
                   </tr>
                 ) : (
                   products.map((p) => (
@@ -922,6 +931,21 @@ const ProductsPage: React.FC = () => {
                           {p.trade_type}
                         </span>
                        </td>
+                      <td className="px-6 py-4 text-sm">{p.diamond_pcs ?? 0}</td>
+                      <td className="px-6 py-4 text-sm">{p.diamond_carat ?? 0}</td>
+                      <td className="px-6 py-4 text-sm capitalize">{p.metal_type || "gold"}</td>
+                      <td className="px-6 py-4 text-sm">{p.gold_carat ?? 18}K</td>
+                      <td className="px-6 py-4 text-sm">
+                        <button
+                          onClick={() => {
+                            setViewingDiamonds(p.diamonds && Array.isArray(p.diamonds) ? p.diamonds : []);
+                            setViewDiamondsOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                        >
+                          <Eye size={14} /> {p.diamonds?.length || 0}
+                        </button>
+                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="font-medium">{p.available_qty ?? 0}</div>
                         <div className="text-xs text-slate-500">units</div>
@@ -967,7 +991,7 @@ const ProductsPage: React.FC = () => {
                           <Trash2 size={14} /> Delete
                         </button>
                        </td>
-                    </tr>
+                     </tr>
                   ))
                 )}
               </tbody>
@@ -1004,7 +1028,7 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* CREATE / EDIT MODAL (unchanged) */}
+      {/* CREATE / EDIT MODAL (unchanged from previous) */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div
@@ -1131,8 +1155,8 @@ const ProductsPage: React.FC = () => {
                             <td className="px-3 py-2 space-x-2">
                               <button type="button" onClick={() => openEditDiamondModal(idx)} className="text-blue-600"><Edit2 size={14} /></button>
                               <button type="button" onClick={() => removeDiamond(idx)} className="text-rose-600"><Trash2 size={14} /></button>
-                            </td>
-                          </tr>
+                             </td>
+                           </tr>
                         ))}
                       </tbody>
                     </table>
@@ -1189,7 +1213,7 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Diamond Modal */}
+      {/* Diamond Modal (add/edit) */}
       {diamondModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950">
@@ -1208,6 +1232,59 @@ const ProductsPage: React.FC = () => {
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setDiamondModalOpen(false)} className="rounded-full border px-4 py-2">Cancel</button>
               <button onClick={saveDiamond} className="rounded-full bg-slate-900 px-4 py-2 text-white">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Diamonds Modal */}
+      {viewDiamondsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Gemstone Details</h3>
+              <button onClick={() => setViewDiamondsOpen(false)} className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800">
+                <X size={18} />
+              </button>
+            </div>
+            {viewingDiamonds.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 dark:text-slate-400">No gemstones added for this product.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-100 dark:bg-slate-800">
+                    <tr>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Pcs</th>
+                      <th className="px-3 py-2">Carat</th>
+                      <th className="px-3 py-2">Rate</th>
+                      <th className="px-3 py-2">Color</th>
+                      <th className="px-3 py-2">Clarity</th>
+                      <th className="px-3 py-2">Shape</th>
+                      <th className="px-3 py-2">Packet No.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingDiamonds.map((d, idx) => (
+                      <tr key={idx} className="border-t">
+                        <td className="px-3 py-2">{d.type || "Diamond"}</td>
+                        <td className="px-3 py-2">{d.pcs || 0}</td>
+                        <td className="px-3 py-2">{d.carat || 0}</td>
+                        <td className="px-3 py-2">{d.rate || 0}</td>
+                        <td className="px-3 py-2">{d.color || "—"}</td>
+                        <td className="px-3 py-2">{d.clarity || "—"}</td>
+                        <td className="px-3 py-2">{d.shape || "—"}</td>
+                        <td className="px-3 py-2">{d.packet_no || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button onClick={() => setViewDiamondsOpen(false)} className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                Close
+              </button>
             </div>
           </div>
         </div>
