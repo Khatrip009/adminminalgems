@@ -47,6 +47,10 @@ import type { Category } from "@/api/masters/categories.api";
 import { fetchCategories } from "@/api/masters/categories.api";
 import { getAssetUrl } from "@/utils/assetUrl";
 
+// Helper to get full API URL for raw fetch
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const getFullApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+
 const TRADE_TYPE_OPTIONS: { value: ProductTradeType | ""; label: string }[] = [
   { value: "", label: "All trade types" },
   { value: "import", label: "Import" },
@@ -91,7 +95,7 @@ const DIAMOND_CLARITY_OPTIONS = [
 ];
 
 interface DiamondEntry {
-  id: string; // temporary for UI
+  id: string;
   pcs: number;
   type: string;
   carat: number;
@@ -115,11 +119,10 @@ interface ProductFormState {
   is_published: boolean;
   available_qty: number;
   moq: number;
-  // New fields
   diamond_pcs: number;
   diamond_carat: number;
   rate: number;
-  diamonds: any[]; // JSON array
+  diamonds: any[];
   metal_type: string;
   gold_carat: number;
 }
@@ -155,8 +158,7 @@ function slugifyClient(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -182,6 +184,8 @@ const ProductsPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
@@ -189,7 +193,6 @@ const ProductsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
-  // Diamond entries state for structured editing
   const [diamondEntries, setDiamondEntries] = useState<DiamondEntry[]>([]);
   const [diamondModalOpen, setDiamondModalOpen] = useState(false);
   const [editingDiamondIndex, setEditingDiamondIndex] = useState<number | null>(null);
@@ -218,15 +221,11 @@ const ProductsPage: React.FC = () => {
 
   const pageCount = useMemo(() => (total > 0 ? Math.ceil(total / limit) : 1), [total, limit]);
 
-  // Sync diamonds JSON with entries
   useEffect(() => {
     const diamondsForBackend = diamondEntries.map(({ id, ...rest }) => rest);
     setForm((prev) => ({ ...prev, diamonds: diamondsForBackend }));
-    // Also update aggregated totals
     const totalPcs = diamondEntries.reduce((sum, d) => sum + (d.pcs || 0), 0);
     const totalCarat = diamondEntries.reduce((sum, d) => sum + (d.carat || 0), 0);
-    // rate is per carat average? we'll keep separate, but for now just sum carat*rate? Actually backend expects rate field separately.
-    // We'll keep the rate field as is (can be average)
     setForm((prev) => ({
       ...prev,
       diamond_pcs: totalPcs,
@@ -249,6 +248,7 @@ const ProductsPage: React.FC = () => {
       setProducts(res.products || []);
       setTotal(res.total || 0);
       setPage(res.page || pageToFetch);
+      setSelectedProductIds(new Set());
     } catch (err) {
       console.error("Failed to load products", err);
       toast.error("Failed to load products.");
@@ -314,7 +314,6 @@ const ProductsPage: React.FC = () => {
   const openEditModal = (p: Product) => {
     setModalMode("edit");
     setCurrentProduct(p);
-    // Parse diamonds if exists
     let parsedDiamonds: DiamondEntry[] = [];
     if (p.diamonds && Array.isArray(p.diamonds)) {
       parsedDiamonds = p.diamonds.map((d, idx) => ({
@@ -521,7 +520,6 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // Diamond management functions
   const openAddDiamondModal = () => {
     setEditingDiamondIndex(null);
     setCurrentDiamond({
@@ -576,58 +574,70 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // Export CSV (all products or selected via query param? For now all products)
-  const handleExportCsv = async () => {
+  const toggleSelectProduct = (productId: string) => {
+    const newSet = new Set(selectedProductIds);
+    if (newSet.has(productId)) {
+      newSet.delete(productId);
+    } else {
+      newSet.add(productId);
+    }
+    setSelectedProductIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProductIds.size === products.length) {
+      setSelectedProductIds(new Set());
+    } else {
+      setSelectedProductIds(new Set(products.map(p => p.id)));
+    }
+  };
+
+  // ✅ Fixed export handlers using full API URL
+  const handleExportAll = async () => {
     if (!products.length) {
       toast("No products to export.", { icon: "ℹ️" });
       return;
     }
+    try {
+      const token = localStorage.getItem("token");
+      const url = getFullApiUrl(`/api/masters/products/export?format=csv`);
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      downloadBlob(blob, "products_export.csv");
+      toast.success("All products exported.");
+    } catch (err) {
+      console.error("Export failed", err);
+      toast.error("Failed to export products.");
+    }
+  };
 
-    const header = [
-      "id", "sku", "title", "slug", "description", "short_description",
-      "category_id", "price", "currency", "moq", "available_qty", "is_published",
-      "trade_type", "diamond_pcs", "diamond_carat", "rate", "diamonds",
-      "metal_type", "gold_carat", "created_at", "updated_at"
-    ];
-
-    const rows = products.map((p) => [
-      p.id,
-      p.sku ?? "",
-      p.title ?? "",
-      p.slug ?? "",
-      (p.description ?? "").replace(/"/g, '""'),
-      (p.short_description ?? "").replace(/"/g, '""'),
-      p.category_id ?? "",
-      p.price ?? 0,
-      p.currency ?? "INR",
-      p.moq ?? 0,
-      p.available_qty ?? 0,
-      p.is_published ? "true" : "false",
-      p.trade_type ?? "",
-      p.diamond_pcs ?? 0,
-      p.diamond_carat ?? 0,
-      p.rate ?? 0,
-      JSON.stringify(p.diamonds ?? []),
-      p.metal_type ?? "gold",
-      p.gold_carat ?? 18,
-      p.created_at,
-      p.updated_at,
-    ]);
-
-    const csvLines = [
-      header.join(","),
-      ...rows.map((r) =>
-        r
-          .map((v) => {
-            const s = String(v ?? "");
-            return s.includes(",") || s.includes('"') ? `"${s}"` : s;
-          })
-          .join(",")
-      ),
-    ];
-
-    downloadCsv("products_export.csv", csvLines.join("\n"));
-    toast.success("Products exported as CSV.");
+  const handleExportSelected = async () => {
+    if (selectedProductIds.size === 0) {
+      toast.error("No products selected.");
+      return;
+    }
+    const ids = Array.from(selectedProductIds).join(",");
+    try {
+      const token = localStorage.getItem("token");
+      const url = getFullApiUrl(`/api/masters/products/export?format=csv&ids=${ids}`);
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      downloadBlob(blob, "selected_products_export.csv");
+      toast.success("Selected products exported.");
+    } catch (err) {
+      console.error("Export selected failed", err);
+      toast.error("Failed to export selected products.");
+    }
   };
 
   const handleImportClick = () => {
@@ -655,7 +665,6 @@ const ProductsPage: React.FC = () => {
 
       const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").trim());
       const dataLines = lines.slice(1);
-
       let created = 0;
       let failed = 0;
 
@@ -669,7 +678,6 @@ const ProductsPage: React.FC = () => {
             failed++;
             continue;
           }
-
           let diamondsArray = [];
           if (record.diamonds) {
             try {
@@ -678,7 +686,6 @@ const ProductsPage: React.FC = () => {
               diamondsArray = [];
             }
           }
-
           await createProductAdmin({
             title: record.title,
             slug: record.slug || slugifyClient(record.title),
@@ -705,7 +712,6 @@ const ProductsPage: React.FC = () => {
           failed++;
         }
       }
-
       const summary = `Import completed. Created: ${created}, Failed: ${failed}.`;
       setImportSummary(summary);
       toast.success("Products CSV import completed.");
@@ -731,10 +737,17 @@ const ProductsPage: React.FC = () => {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={handleExportCsv}
+              onClick={handleExportAll}
               className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
-              <Download size={16} /> Export CSV
+              <Download size={16} /> Export All
+            </button>
+            <button
+              onClick={handleExportSelected}
+              disabled={selectedProductIds.size === 0}
+              className="flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+            >
+              <Download size={16} /> Export Selected ({selectedProductIds.size})
             </button>
             <button
               onClick={handleImportClick}
@@ -828,6 +841,14 @@ const ProductsPage: React.FC = () => {
             <table className="min-w-full text-left text-base text-slate-800 dark:text-slate-200">
               <thead className="bg-slate-100 text-sm uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
+                  <th className="px-4 py-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={products.length > 0 && selectedProductIds.size === products.length}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 dark:border-slate-600"
+                    />
+                  </th>
                   <th className="px-6 py-4">Image</th>
                   <th className="px-6 py-4">ID</th>
                   <th className="px-6 py-4">Product</th>
@@ -842,18 +863,26 @@ const ProductsPage: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-lg">
+                    <td colSpan={10} className="py-8 text-center text-lg">
                       <Loader2 className="mx-auto animate-spin" />
                       Loading...
                     </td>
                   </tr>
                 ) : products.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-lg">No products found</td>
+                    <td colSpan={10} className="py-8 text-center text-lg">No products found</td>
                   </tr>
                 ) : (
                   products.map((p) => (
                     <tr key={p.id} className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.has(p.id)}
+                          onChange={() => toggleSelectProduct(p.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 dark:border-slate-600"
+                        />
+                       </td>
                       <td className="px-6 py-4">
                         {p.primary_image ? (
                           <img
@@ -866,7 +895,7 @@ const ProductsPage: React.FC = () => {
                             <Package size={20} className="text-slate-400" />
                           </div>
                         )}
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-xs font-mono text-slate-500">{p.id.slice(0, 8)}...</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
@@ -880,23 +909,23 @@ const ProductsPage: React.FC = () => {
                           )}
                           {p.sku && <div className="text-xs text-slate-400 dark:text-slate-500">SKU: {p.sku}</div>}
                         </div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4">
                         <div className="text-base font-semibold">
                           {p.currency} {Number(p.price).toLocaleString()}
                         </div>
                         <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
                       <td className="px-6 py-4">
                         <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
                           {p.trade_type}
                         </span>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="font-medium">{p.available_qty ?? 0}</div>
                         <div className="text-xs text-slate-500">units</div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4">
                         <button
                           onClick={() => handleTogglePublished(p)}
@@ -909,7 +938,7 @@ const ProductsPage: React.FC = () => {
                           <CheckCircle2 size={14} />
                           {p.is_published ? "Published" : "Draft"}
                         </button>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
                         <Link
                           to={`/admin/products/${p.id}`}
@@ -937,7 +966,7 @@ const ProductsPage: React.FC = () => {
                         >
                           <Trash2 size={14} /> Delete
                         </button>
-                      </td>
+                       </td>
                     </tr>
                   ))
                 )}
@@ -975,7 +1004,7 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* CREATE / EDIT MODAL with structured diamond entries */}
+      {/* CREATE / EDIT MODAL (unchanged) */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div
@@ -1057,7 +1086,7 @@ const ProductsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Gemstone Details Section with Table */}
+              {/* Gemstone Section */}
               <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
@@ -1081,39 +1110,27 @@ const ProductsPage: React.FC = () => {
                     <table className="min-w-full text-sm">
                       <thead className="bg-slate-100 dark:bg-slate-800">
                         <tr>
-                          <th className="px-3 py-2 text-left">Type</th>
-                          <th className="px-3 py-2 text-left">Pcs</th>
-                          <th className="px-3 py-2 text-left">Carat</th>
-                          <th className="px-3 py-2 text-left">Rate</th>
-                          <th className="px-3 py-2 text-left">Color</th>
-                          <th className="px-3 py-2 text-left">Clarity</th>
-                          <th className="px-3 py-2 text-center">Actions</th>
+                          <th className="px-3 py-2">Type</th>
+                          <th className="px-3 py-2">Pcs</th>
+                          <th className="px-3 py-2">Carat</th>
+                          <th className="px-3 py-2">Rate</th>
+                          <th className="px-3 py-2">Color</th>
+                          <th className="px-3 py-2">Clarity</th>
+                          <th className="px-3 py-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {diamondEntries.map((d, idx) => (
-                          <tr key={d.id} className="border-t border-slate-200 dark:border-slate-700">
+                          <tr key={d.id} className="border-t">
                             <td className="px-3 py-2">{d.type}</td>
                             <td className="px-3 py-2">{d.pcs}</td>
                             <td className="px-3 py-2">{d.carat}</td>
                             <td className="px-3 py-2">{d.rate.toLocaleString()}</td>
                             <td className="px-3 py-2">{d.color}</td>
                             <td className="px-3 py-2">{d.clarity}</td>
-                            <td className="px-3 py-2 text-center space-x-2">
-                              <button
-                                type="button"
-                                onClick={() => openEditDiamondModal(idx)}
-                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeDiamond(idx)}
-                                className="text-rose-600 hover:text-rose-800 dark:text-rose-400"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                            <td className="px-3 py-2 space-x-2">
+                              <button type="button" onClick={() => openEditDiamondModal(idx)} className="text-blue-600"><Edit2 size={14} /></button>
+                              <button type="button" onClick={() => removeDiamond(idx)} className="text-rose-600"><Trash2 size={14} /></button>
                             </td>
                           </tr>
                         ))}
@@ -1128,7 +1145,7 @@ const ProductsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Metal Details Section */}
+              {/* Metal Section */}
               <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
                 <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
                   <Gem size={18} /> Metal Details
@@ -1153,17 +1170,16 @@ const ProductsPage: React.FC = () => {
                 <label className="mb-1 block text-sm font-medium">Short Description</label>
                 <textarea rows={2} value={form.short_description} onChange={(e) => setForm((f) => ({ ...f, short_description: e.target.value }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
               </div>
-
               <div>
                 <label className="mb-1 block text-sm font-medium">Full Description</label>
                 <textarea rows={4} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
               </div>
 
               <div className="flex items-center justify-between pt-4">
-                <p className="text-sm text-slate-500 dark:text-slate-400">Required fields are marked with *</p>
+                <p className="text-sm text-slate-500">Required fields are marked with *</p>
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => setModalOpen(false)} className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Cancel</button>
-                  <button type="submit" disabled={saving} className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900">
+                  <button type="button" onClick={() => setModalOpen(false)} className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-100">Cancel</button>
+                  <button type="submit" disabled={saving} className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
                     {saving ? <Loader2 className="animate-spin" size={16} /> : (modalMode === "create" ? "Create Product" : "Save Changes")}
                   </button>
                 </div>
@@ -1173,71 +1189,25 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Diamond/Gemstone Entry Modal */}
+      {/* Diamond Modal */}
       {diamondModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-md rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                {editingDiamondIndex !== null ? "Edit Gemstone" : "Add Gemstone"}
-              </h3>
-              <button onClick={() => setDiamondModalOpen(false)} className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800">
-                <X size={18} />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950">
+            <div className="mb-4 flex justify-between">
+              <h3 className="text-lg font-semibold">{editingDiamondIndex !== null ? "Edit Gemstone" : "Add Gemstone"}</h3>
+              <button onClick={() => setDiamondModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Type</label>
-                <select
-                  value={currentDiamond.type}
-                  onChange={(e) => setCurrentDiamond({ ...currentDiamond, type: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                >
-                  {DIAMOND_TYPE_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Pieces</label>
-                  <input type="number" min={1} value={currentDiamond.pcs} onChange={(e) => setCurrentDiamond({ ...currentDiamond, pcs: Number(e.target.value) })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Carat (ct)</label>
-                  <input type="number" min={0} step={0.001} value={currentDiamond.carat} onChange={(e) => setCurrentDiamond({ ...currentDiamond, carat: Number(e.target.value) })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Rate (per carat)</label>
-                <input type="number" min={0} step={0.01} value={currentDiamond.rate} onChange={(e) => setCurrentDiamond({ ...currentDiamond, rate: Number(e.target.value) })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Color</label>
-                  <select value={currentDiamond.color} onChange={(e) => setCurrentDiamond({ ...currentDiamond, color: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
-                    {DIAMOND_COLOR_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Clarity</label>
-                  <select value={currentDiamond.clarity} onChange={(e) => setCurrentDiamond({ ...currentDiamond, clarity: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
-                    {DIAMOND_CLARITY_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Shape (optional)</label>
-                <input type="text" value={currentDiamond.shape || ""} onChange={(e) => setCurrentDiamond({ ...currentDiamond, shape: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="e.g., Round, Princess, Emerald" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Packet No. (optional)</label>
-                <input type="text" value={currentDiamond.packet_no || ""} onChange={(e) => setCurrentDiamond({ ...currentDiamond, packet_no: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
-              </div>
+              <div><label>Type</label><select value={currentDiamond.type} onChange={(e) => setCurrentDiamond({...currentDiamond, type: e.target.value})} className="w-full rounded-lg border p-2">{DIAMOND_TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></div>
+              <div className="grid grid-cols-2 gap-3"><div><label>Pieces</label><input type="number" min={1} value={currentDiamond.pcs} onChange={(e) => setCurrentDiamond({...currentDiamond, pcs: Number(e.target.value)})} className="w-full rounded-lg border p-2" /></div><div><label>Carat</label><input type="number" min={0} step={0.001} value={currentDiamond.carat} onChange={(e) => setCurrentDiamond({...currentDiamond, carat: Number(e.target.value)})} className="w-full rounded-lg border p-2" /></div></div>
+              <div><label>Rate (per carat)</label><input type="number" min={0} step={0.01} value={currentDiamond.rate} onChange={(e) => setCurrentDiamond({...currentDiamond, rate: Number(e.target.value)})} className="w-full rounded-lg border p-2" /></div>
+              <div className="grid grid-cols-2 gap-3"><div><label>Color</label><select value={currentDiamond.color} onChange={(e) => setCurrentDiamond({...currentDiamond, color: e.target.value})} className="w-full rounded-lg border p-2">{DIAMOND_COLOR_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></div><div><label>Clarity</label><select value={currentDiamond.clarity} onChange={(e) => setCurrentDiamond({...currentDiamond, clarity: e.target.value})} className="w-full rounded-lg border p-2">{DIAMOND_CLARITY_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></div></div>
+              <div><label>Shape (optional)</label><input type="text" value={currentDiamond.shape || ""} onChange={(e) => setCurrentDiamond({...currentDiamond, shape: e.target.value})} className="w-full rounded-lg border p-2" /></div>
+              <div><label>Packet No. (optional)</label><input type="text" value={currentDiamond.packet_no || ""} onChange={(e) => setCurrentDiamond({...currentDiamond, packet_no: e.target.value})} className="w-full rounded-lg border p-2" /></div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setDiamondModalOpen(false)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 dark:border-slate-700">Cancel</button>
-              <button onClick={saveDiamond} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900">
-                <SaveIcon size={14} className="inline mr-1" /> Save
-              </button>
+              <button onClick={() => setDiamondModalOpen(false)} className="rounded-full border px-4 py-2">Cancel</button>
+              <button onClick={saveDiamond} className="rounded-full bg-slate-900 px-4 py-2 text-white">Save</button>
             </div>
           </div>
         </div>
