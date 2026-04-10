@@ -49,6 +49,7 @@ import {
 import { fetchProductsAdmin, type Product } from "@/api/masters/products.api";
 import { listCustomers } from "@/api/masters/customers.api";
 import { listCraftsmen } from "@/api/masters/craftsmen.api";
+import { getAssetUrl } from "@/utils/assetUrl";
 
 /* =========================================================
    TYPES
@@ -886,6 +887,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
   const watchGold = watch("gold");
   const watchGoldRate = watch("gold_rate");
   const watchGoldPrice = watch("gold_price");
+  const watchProductId = watch("product_id");
 
   // Auto-calculate gold price when gold or gold_rate changes
   useEffect(() => {
@@ -895,7 +897,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [watchGold, watchGoldRate, watchGoldPrice, setValue]);
 
-  // Load master data
+  // Load master data (products, customers, craftsmen)
   useEffect(() => {
     const loadMasters = async () => {
       try {
@@ -922,11 +924,17 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
         .then((res: any) => {
           if (res?.ok && res.result) {
             const sale = res.result;
+            let diamondsArray = [];
+            try {
+              diamondsArray = typeof sale.diamonds === "string" ? JSON.parse(sale.diamonds) : sale.diamonds || [];
+            } catch {
+              diamondsArray = [];
+            }
             reset({
               number: sale.number,
               item: sale.item,
               product_id: sale.product_id,
-              diamonds: (sale.diamonds || []).map((d: any) => ({
+              diamonds: diamondsArray.map((d: any) => ({
                 pcs: d.pcs,
                 carat: d.carat,
                 rate: d.rate,
@@ -960,17 +968,61 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [editingId, reset, onClose]);
 
-  const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const productId = e.target.value;
-    const product = products.find((p) => p.id === productId);
-    if (product) {
-      setValue("product_id", product.id);
-      setValue("item", product.title);
-    } else {
-      setValue("product_id", null);
-      setValue("item", "");
+  // ✅ NEW: Auto-fill product data when product selection changes
+  useEffect(() => {
+    if (!watchProductId) return;
+    const selectedProduct = products.find((p) => p.id === watchProductId);
+    if (!selectedProduct) return;
+
+    // Set item name from product title
+    setValue("item", selectedProduct.title);
+
+    // Set gold carat from product (default 18 if not present)
+    setValue("gold_carat", selectedProduct.gold_carat || 18);
+
+    // Populate diamonds array from product's diamonds JSON
+    let productDiamonds: any[] = [];
+    if (selectedProduct.diamonds && Array.isArray(selectedProduct.diamonds)) {
+      productDiamonds = selectedProduct.diamonds;
+    } else if (typeof selectedProduct.diamonds === "string") {
+      try {
+        productDiamonds = JSON.parse(selectedProduct.diamonds);
+      } catch {
+        productDiamonds = [];
+      }
     }
-  };
+
+    if (productDiamonds.length > 0) {
+      // Replace the existing diamonds array with product diamonds
+      const mapped = productDiamonds.map((d: any) => ({
+        pcs: d.pcs || 0,
+        carat: d.carat || 0,
+        rate: d.rate || 0,
+        type: d.type || "Diamond",
+        packet_no: d.packet_no || "",
+      }));
+      // Since useFieldArray doesn't have a direct replaceAll, we remove all and append
+      const currentLength = fields.length;
+      for (let i = 0; i < currentLength; i++) {
+        remove(0);
+      }
+      mapped.forEach((d) => append(d));
+    } else {
+      // If product has no diamonds, keep default empty entry
+      const currentLength = fields.length;
+      if (currentLength === 0) {
+        append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" });
+      }
+    }
+
+    // Set product image preview from product's primary_image
+    if (selectedProduct.primary_image) {
+      const imgUrl = getAssetUrl(selectedProduct.primary_image);
+      setImagePreview(imgUrl);
+    } else {
+      setImagePreview(null);
+    }
+  }, [watchProductId, products, setValue, fields.length, remove, append]);
 
   const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const custId = e.target.value;
@@ -1085,13 +1137,12 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Product (optional)</label>
+              <label className="block text-sm font-medium mb-1">Product</label>
               <select
-                onChange={handleProductChange}
+                {...register("product_id")}
                 className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
-                value={watch("product_id") || ""}
               >
-                <option value="">-- Select Product --</option>
+                <option value="">-- Select Product (auto-fills details) --</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title}
@@ -1111,7 +1162,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Customer (optional)</label>
+              <label className="block text-sm font-medium mb-1">Customer</label>
               <select
                 onChange={handleCustomerChange}
                 className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
@@ -1136,7 +1187,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Craftsman (optional)</label>
+              <label className="block text-sm font-medium mb-1">Craftsman</label>
               <select
                 onChange={handleCraftsmanChange}
                 className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
