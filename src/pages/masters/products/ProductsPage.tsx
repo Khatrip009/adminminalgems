@@ -1042,7 +1042,7 @@ const ProductsPage: React.FC = () => {
 
       {/* CREATE / EDIT MODAL (unchanged) – omitted for brevity, but must be kept exactly as before */}
       {modalOpen && (
-        <div className="fixed inset-0 z-1000 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div
             ref={modalContentRef}
             className="w-full max-w-5xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4"
