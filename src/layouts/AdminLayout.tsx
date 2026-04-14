@@ -77,7 +77,7 @@ const AdminLayout: React.FC = () => {
         ================================================= */}
         <div className="flex min-h-[100dvh] flex-1 flex-col">
           {/* TOPBAR */}
-          <header className="sticky top-0 z-30 w-full bg-slate-100/80 backdrop-blur dark:bg-slate-950/80">
+          <header className="sticky top-0 z-10 w-full bg-slate-100/80 backdrop-blur dark:bg-slate-950/80">
             <AdminTopbar onToggleSidebar={toggleMobileSidebar} />
           </header>
 

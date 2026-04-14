@@ -65,7 +65,7 @@ const AdminTopbar: React.FC<AdminTopbarProps> = ({ onToggleSidebar }) => {
     .join("");
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80">
+    <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80">
       <div className="flex items-center justify-between px-4 py-2.5 md:px-6">
         {/* Left */}
         <div className="flex items-center gap-2 md:gap-3">
