@@ -47,7 +47,7 @@ import {
 import type { Category } from "@/api/masters/categories.api";
 import { fetchCategories } from "@/api/masters/categories.api";
 import { getAssetUrl } from "@/utils/assetUrl";
-import { useAuth } from "@/context/AuthContext"; // ✅ import auth hook
+import { useAuth } from "@/context/AuthContext";
 
 // Helper to get full API URL for raw fetch
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -172,7 +172,6 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 const ProductsPage: React.FC = () => {
-  // ✅ get token from AuthContext
   const { token } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -600,7 +599,6 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // ✅ Export handlers using token from AuthContext
   const handleExportAll = async () => {
     if (!products.length) {
       toast("No products to export.", { icon: "ℹ️" });
@@ -930,19 +928,19 @@ const ProductsPage: React.FC = () => {
                           )}
                           {p.sku && <div className="text-xs text-slate-400 dark:text-slate-500">SKU: {p.sku}</div>}
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="text-base font-semibold">
                           {p.currency} {Number(p.price).toLocaleString()}
                         </div>
                         <div className="text-xs text-slate-500">MOQ: {p.moq ?? 1}</div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 text-sm">{findCategoryName(p.category_id)}</td>
                       <td className="px-6 py-4">
                         <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
                           {p.trade_type}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 text-sm">{p.diamond_pcs ?? 0}</td>
                       <td className="px-6 py-4 text-sm">{p.diamond_carat ?? 0}</td>
                       <td className="px-6 py-4 text-sm capitalize">{p.metal_type || "gold"}</td>
@@ -957,11 +955,11 @@ const ProductsPage: React.FC = () => {
                         >
                           <Eye size={14} /> {p.diamonds?.length || 0}
                         </button>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="font-medium">{p.available_qty ?? 0}</div>
                         <div className="text-xs text-slate-500">units</div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4">
                         <button
                           onClick={() => handleTogglePublished(p)}
@@ -974,7 +972,7 @@ const ProductsPage: React.FC = () => {
                           <CheckCircle2 size={14} />
                           {p.is_published ? "Published" : "Draft"}
                         </button>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 text-right space-x-2">
                         <Link
                           to={`/admin/products/${p.id}`}
@@ -1003,7 +1001,7 @@ const ProductsPage: React.FC = () => {
                           <Trash2 size={14} /> Delete
                         </button>
                        </td>
-                     </tr>
+                    </tr>
                   ))
                 )}
               </tbody>
@@ -1040,12 +1038,12 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* CREATE / EDIT MODAL (unchanged) – omitted for brevity, but must be kept exactly as before */}
+      {/* CREATE / EDIT MODAL – fixed position and scroll */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 backdrop-blur-sm">
           <div
             ref={modalContentRef}
-            className="w-full max-w-5xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4"
+            className="w-full max-w-5xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1227,7 +1225,7 @@ const ProductsPage: React.FC = () => {
 
       {/* Diamond Modal (add/edit) */}
       {diamondModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950">
             <div className="mb-4 flex justify-between">
               <h3 className="text-lg font-semibold">{editingDiamondIndex !== null ? "Edit Gemstone" : "Add Gemstone"}</h3>
@@ -1251,8 +1249,8 @@ const ProductsPage: React.FC = () => {
 
       {/* View Diamonds Modal */}
       {viewDiamondsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Gemstone Details</h3>
               <button onClick={() => setViewDiamondsOpen(false)} className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -1304,8 +1302,9 @@ const ProductsPage: React.FC = () => {
 
       {/* ASSET MODAL – unchanged */}
       {assetModalOpen && assetProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-3xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4">
+            {/* ... (asset modal content remains the same) ... */}
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src="/minal_gems_logo.svg" className="h-10 w-auto" />
@@ -1320,7 +1319,6 @@ const ProductsPage: React.FC = () => {
                 <X size={18} />
               </button>
             </div>
-
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <ImageIcon size={16} />
@@ -1331,17 +1329,9 @@ const ProductsPage: React.FC = () => {
                   {assetsSaving ? <Loader2 className="animate-spin" size={16} /> : <ImagePlus size={16} />}
                   Upload Media
                 </button>
-                <input
-                  ref={assetsFileInputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleAssetsFileChange}
-                />
+                <input ref={assetsFileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleAssetsFileChange} />
               </div>
             </div>
-
             <div className="max-h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
               {assetsLoading ? (
                 <div className="flex flex-col items-center justify-center py-10 text-slate-500 dark:text-slate-400">
@@ -1393,7 +1383,6 @@ const ProductsPage: React.FC = () => {
                 </div>
               )}
             </div>
-
             <div className="mt-4 flex justify-end">
               <button onClick={() => setAssetModalOpen(false)} className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 Close
