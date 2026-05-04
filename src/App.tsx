@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./layouts/AdminLayout";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 // PUBLIC
 import LoginPage from "./pages/auth/LoginPage";
@@ -89,103 +90,108 @@ import NotFoundPage from "./pages/misc/NotFoundPage";
 
 const App: React.FC = () => {
   return (
-    <Routes>
-      {/* Redirect root to admin */}
-      <Route path="/" element={<Navigate to="/admin" replace />} />
+    <>
+      {/* PWA installation prompt – shows on every page */}
+      <PWAInstallPrompt />
 
-      {/* PUBLIC */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/return/request" element={<ReturnRequestPage />} />
-      <Route path="/return/confirmation" element={<ReturnConfirmationPage />} />
-      <Route path="/account/returns" element={<AccountReturnsPage />} />
+      <Routes>
+        {/* Redirect root to admin */}
+        <Route path="/" element={<Navigate to="/admin" replace />} />
 
-      {/* ADMIN (protected) */}
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<DashboardHome />} />
+        {/* PUBLIC */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/return/request" element={<ReturnRequestPage />} />
+        <Route path="/return/confirmation" element={<ReturnConfirmationPage />} />
+        <Route path="/account/returns" element={<AccountReturnsPage />} />
 
-        {/* Reports / CRM */}
-        <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
-        <Route path="leads" element={<LeadsPage />} />
-        <Route path="notifications" element={<NotificationsAdminPage />} />
+        {/* ADMIN (protected) */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<DashboardHome />} />
 
-        {/* Masters */}
-        <Route path="products/:id" element={<ProductDetailPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="suppliers" element={<AdminSuppliersPage />} />
-        <Route path="customers" element={<AdminCustomersPage />} />
-        <Route path="craftsmen" element={<AdminCraftsmanPage />} />
-        <Route path="craftsman-accounts" element={<AdminCraftsmanAccountsPage />} />
+          {/* Reports / CRM */}
+          <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
+          <Route path="leads" element={<LeadsPage />} />
+          <Route path="notifications" element={<NotificationsAdminPage />} />
 
-        {/* Procurement */}
-        <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
-        <Route path="purchase-orders/create" element={<PurchaseOrderCreatePage />} />
-        <Route path="purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
-        <Route path="grn" element={<GRNListPage />} />
-        <Route path="grn/create" element={<GRNCreatePage />} />
-        <Route path="grn/:id" element={<GRNDetailPage />} />
-        <Route path="supplier-invoices/:id" element={<AdminInvoiceDetailPage />} />
-        <Route path="suppliers/:id/invoices" element={<AdminSupplierInvoicesPage />} />
-        <Route path="suppliers/:id/payments" element={<AdminSupplierPaymentsPage />} />
-        <Route path="suppliers/:id/ledger" element={<AdminSupplierLedgerPage />} />
+          {/* Masters */}
+          <Route path="products/:id" element={<ProductDetailPage />} />
+          <Route path="products" element={<ProductsPage />} />
+          <Route path="categories" element={<CategoriesPage />} />
+          <Route path="suppliers" element={<AdminSuppliersPage />} />
+          <Route path="customers" element={<AdminCustomersPage />} />
+          <Route path="craftsmen" element={<AdminCraftsmanPage />} />
+          <Route path="craftsman-accounts" element={<AdminCraftsmanAccountsPage />} />
 
-        {/* Inventory */}
-        <Route path="inventory/packets" element={<AdminDiamondPacketsPage />} />
-        <Route path="inventory/packets/create" element={<PacketCreatePage />} />
-        <Route path="inventory/packets/:id" element={<AdminPacketDetailPage />} />
-        <Route path="inventory/packets/:id/split" element={<PacketSplitPage />} />
-        <Route path="inventory/packets/:id/merge" element={<PacketMergePage />} />
-        <Route path="inventory/labels" element={<PacketLabelsPage />} />
-        <Route path="inventory/movements" element={<AdminStockMovementsPage />} />
-        <Route path="inventory/valuation" element={<AdminWarehouseValuationPage />} />
+          {/* Procurement */}
+          <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
+          <Route path="purchase-orders/create" element={<PurchaseOrderCreatePage />} />
+          <Route path="purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
+          <Route path="grn" element={<GRNListPage />} />
+          <Route path="grn/create" element={<GRNCreatePage />} />
+          <Route path="grn/:id" element={<GRNDetailPage />} />
+          <Route path="supplier-invoices/:id" element={<AdminInvoiceDetailPage />} />
+          <Route path="suppliers/:id/invoices" element={<AdminSupplierInvoicesPage />} />
+          <Route path="suppliers/:id/payments" element={<AdminSupplierPaymentsPage />} />
+          <Route path="suppliers/:id/ledger" element={<AdminSupplierLedgerPage />} />
 
-        {/* Production */}
-        <Route path="work-orders" element={<AdminWorkOrdersPage />} />
-        <Route path="work-orders/create" element={<AdminWorkOrderCreatePage />} />
-        <Route path="work-orders/:id" element={<AdminWorkOrderDetailPage />} />
-        <Route path="work-orders/:id/receive" element={<AdminWorkOrderReceivePage />} />
-        <Route path="work-orders/:id/close" element={<AdminWorkOrderClosePage />} />
+          {/* Inventory */}
+          <Route path="inventory/packets" element={<AdminDiamondPacketsPage />} />
+          <Route path="inventory/packets/create" element={<PacketCreatePage />} />
+          <Route path="inventory/packets/:id" element={<AdminPacketDetailPage />} />
+          <Route path="inventory/packets/:id/split" element={<PacketSplitPage />} />
+          <Route path="inventory/packets/:id/merge" element={<PacketMergePage />} />
+          <Route path="inventory/labels" element={<PacketLabelsPage />} />
+          <Route path="inventory/movements" element={<AdminStockMovementsPage />} />
+          <Route path="inventory/valuation" element={<AdminWarehouseValuationPage />} />
 
-        {/* Finance */}
-        <Route path="payments" element={<AdminPaymentsPage />} />
-        <Route path="payments/:id" element={<AdminPaymentDetailPage />} />
-        <Route path="returns" element={<AdminReturnsPage />} />
-        <Route path="returns/:id" element={<AdminReturnDetailPage />} />
-        <Route path="settlements" element={<AdminSettlementPage />} />
-        <Route path="settings/tax-rules" element={<AdminTaxRulesPage />} />
+          {/* Production */}
+          <Route path="work-orders" element={<AdminWorkOrdersPage />} />
+          <Route path="work-orders/create" element={<AdminWorkOrderCreatePage />} />
+          <Route path="work-orders/:id" element={<AdminWorkOrderDetailPage />} />
+          <Route path="work-orders/:id/receive" element={<AdminWorkOrderReceivePage />} />
+          <Route path="work-orders/:id/close" element={<AdminWorkOrderClosePage />} />
 
-        {/* Sales */}
-        <Route path="orders" element={<AdminOrdersPage />} />
-        <Route path="orders/:id" element={<AdminOrderDetailPage />} />
-        <Route path="sales/items" element={<Sales />} />
-        <Route path="promos" element={<AdminPromoCodesPage />} />
+          {/* Finance */}
+          <Route path="payments" element={<AdminPaymentsPage />} />
+          <Route path="payments/:id" element={<AdminPaymentDetailPage />} />
+          <Route path="returns" element={<AdminReturnsPage />} />
+          <Route path="returns/:id" element={<AdminReturnDetailPage />} />
+          <Route path="settlements" element={<AdminSettlementPage />} />
+          <Route path="settings/tax-rules" element={<AdminTaxRulesPage />} />
 
-        {/* Logistics */}
-        <Route path="exports" element={<ExportsPage />} />
-        <Route path="exports/history" element={<ExportHistoryPage />} />
-        <Route path="settings/shipping-methods" element={<AdminShippingMethodsPage />} />
-        <Route path="settings/shipping-rules" element={<AdminShippingRulesPage />} />
+          {/* Sales */}
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+          <Route path="sales/items" element={<Sales />} />
+          <Route path="promos" element={<AdminPromoCodesPage />} />
 
-        {/* System */}
-        <Route path="users" element={<AdminUsersPage />} />
-        <Route path="profile" element={<AdminProfilePage />} />
-        <Route path="security/logins" element={<AdminSecurityLogsPage />} />
-        <Route path="security/alerts" element={<AdminSecurityAlertsPage />} />
+          {/* Logistics */}
+          <Route path="exports" element={<ExportsPage />} />
+          <Route path="exports/history" element={<ExportHistoryPage />} />
+          <Route path="settings/shipping-methods" element={<AdminShippingMethodsPage />} />
+          <Route path="settings/shipping-rules" element={<AdminShippingRulesPage />} />
 
-        {/* Misc */}
-        <Route path="print" element={<PrintCenterPage />} />
-      </Route>
+          {/* System */}
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="profile" element={<AdminProfilePage />} />
+          <Route path="security/logins" element={<AdminSecurityLogsPage />} />
+          <Route path="security/alerts" element={<AdminSecurityAlertsPage />} />
 
-      {/* 404 */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+          {/* Misc */}
+          <Route path="print" element={<PrintCenterPage />} />
+        </Route>
+
+        {/* 404 */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </>
   );
 };
 
