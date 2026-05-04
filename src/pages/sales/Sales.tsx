@@ -88,6 +88,10 @@ interface Sale {
   craftsman_id?: string | null;
   craftsman_name?: string;
   created_at: string;
+  // New fields
+  remarks?: string;
+  conversion_rate?: number;
+  final_amount_usd?: number;
 }
 
 interface SaleFormValues {
@@ -106,6 +110,9 @@ interface SaleFormValues {
   craftsman_id?: string | null;
   craftsman_name?: string;
   product_image?: FileList | null;
+  // New fields
+  remarks?: string;
+  conversion_rate?: number;
 }
 
 /* =========================================================
@@ -116,6 +123,14 @@ const money = (v?: number | string) =>
   v === null || v === undefined || isNaN(Number(v))
     ? "—"
     : `₹${Number(v).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+
+const usdMoney = (v?: number | string) =>
+  v === null || v === undefined || isNaN(Number(v))
+    ? "—"
+    : `$${Number(v).toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`;
@@ -589,7 +604,10 @@ const Sales: React.FC = () => {
                   <th className="p-3 border-b">Gold ₹</th>
                   <th className="p-3 border-b">Making</th>
                   <th className="p-3 border-b">Profit</th>
-                  <th className="p-3 border-b">Selling</th>
+                  <th className="p-3 border-b">Selling ₹</th>
+                  <th className="p-3 border-b">USD Rate</th>
+                  <th className="p-3 border-b">USD Amount</th>
+                  <th className="p-3 border-b">Remarks</th>
                   <th className="p-3 border-b">Customer</th>
                   <th className="p-3 border-b">Craftsman</th>
                   <th className="p-3 border-b">Date</th>
@@ -601,14 +619,14 @@ const Sales: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={21} className="p-8 text-center">
+                    <td colSpan={24} className="p-8 text-center">
                       <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                       <p className="mt-2 text-gray-500">Loading...</p>
                     </td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={21} className="p-8 text-center text-gray-500">
+                    <td colSpan={24} className="p-8 text-center text-gray-500">
                       No sales records found
                     </td>
                   </tr>
@@ -650,7 +668,7 @@ const Sales: React.FC = () => {
                             />
                           )}
                         </td>
-                        <td className="p-3 border-b max-w-xs truncate">{sale.item}</td>
+                        <td className="p-3 border-b max-w-xs truncate" title={sale.item}>{sale.item}</td>
                         <td className="p-3 border-b text-center">{sale.diamond_pcs}</td>
                         <td className="p-3 border-b text-right">{Number(sale.diamond_carat).toFixed(3)}</td>
                         <td className="p-3 border-b text-right">{money(sale.total_diamond_price)}</td>
@@ -663,7 +681,10 @@ const Sales: React.FC = () => {
                           {money(sale.profit_amount)}
                         </td>
                         <td className="p-3 border-b text-right font-bold text-gray-800">{money(sale.selling_price)}</td>
-                        <td className="p-3 border-b max-w-xs truncate">{sale.customer_name || "—"}</td>
+                        <td className="p-3 border-b text-right">{sale.conversion_rate ? sale.conversion_rate.toFixed(4) : "—"}</td>
+                        <td className="p-3 border-b text-right font-medium text-blue-600">{usdMoney(sale.final_amount_usd)}</td>
+                        <td className="p-3 border-b max-w-xs truncate" title={sale.remarks || ""}>{sale.remarks || "—"}</td>
+                        <td className="p-3 border-b max-w-xs truncate" title={sale.customer_name || ""}>{sale.customer_name || "—"}</td>
                         <td className="p-3 border-b">{sale.craftsman_name || "—"}</td>
                         <td className="p-3 border-b whitespace-nowrap">{dateFmt(sale.created_at)}</td>
                         <td className="p-3 border-b text-center">
@@ -707,7 +728,7 @@ const Sales: React.FC = () => {
                       </tr>
                       {expanded.has(sale.id) && (
                         <tr>
-                          <td colSpan={21} className="bg-gray-50 p-4 border-b">
+                          <td colSpan={24} className="bg-gray-50 p-4 border-b">
                             <h4 className="font-semibold mb-2 text-gray-700">Diamond Details</h4>
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs border">
@@ -850,6 +871,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
   const [customers, setCustomers] = useState<any[]>([]);
   const [craftsmen, setCraftsmen] = useState<any[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [usdPreview, setUsdPreview] = useState<number | null>(null);
 
   const {
     register,
@@ -876,6 +898,8 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       craftsman_id: null,
       craftsman_name: "",
       product_image: null,
+      remarks: "",
+      conversion_rate: 0,
     },
   });
 
@@ -888,6 +912,16 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
   const watchGoldRate = watch("gold_rate");
   const watchGoldPrice = watch("gold_price");
   const watchProductId = watch("product_id");
+  const watchSellingPrice = watch("gold_price") + watch("labour_charge") + (() => {
+    let totalDiamond = 0;
+    const diamonds = watch("diamonds") || [];
+    diamonds.forEach(d => {
+      totalDiamond += (d.carat || 0) * (d.rate || 0);
+    });
+    return totalDiamond;
+  })(); // This is simplified; the actual selling price is computed on backend, but we can estimate
+  const watchConversionRate = watch("conversion_rate");
+  const watchRemarks = watch("remarks");
 
   // Auto-calculate gold price when gold or gold_rate changes
   useEffect(() => {
@@ -896,6 +930,27 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       setValue("gold_price", calculated);
     }
   }, [watchGold, watchGoldRate, watchGoldPrice, setValue]);
+
+  // Compute USD preview when selling price or conversion rate changes
+  useEffect(() => {
+    // This is a preview; actual USD is stored in DB after submission.
+    // We'll calculate total diamond amount from fields
+    let totalDiamond = 0;
+    const diamonds = watch("diamonds") || [];
+    diamonds.forEach(d => {
+      totalDiamond += (d.carat || 0) * (d.rate || 0);
+    });
+    const goldPriceVal = watch("gold_price") || 0;
+    const labour = watch("labour_charge") || 0;
+    const totalMaking = totalDiamond + goldPriceVal + labour;
+    const profitPct = watch("profit_percent") || 0;
+    const selling = totalMaking * (1 + profitPct / 100);
+    if (watchConversionRate && watchConversionRate > 0) {
+      setUsdPreview(selling / watchConversionRate);
+    } else {
+      setUsdPreview(null);
+    }
+  }, [watch("diamonds"), watch("gold_price"), watch("labour_charge"), watch("profit_percent"), watchConversionRate]);
 
   // Load master data (products, customers, craftsmen)
   useEffect(() => {
@@ -951,6 +1006,8 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               customer_name: sale.customer_name || "",
               craftsman_id: sale.craftsman_id,
               craftsman_name: sale.craftsman_name || "",
+              remarks: sale.remarks || "",
+              conversion_rate: sale.conversion_rate || 0,
             });
             if (sale.product_image_url) {
               setImagePreview(sale.product_image_url);
@@ -968,19 +1025,15 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [editingId, reset, onClose]);
 
-  // ✅ NEW: Auto-fill product data when product selection changes
+  // Auto-fill product data when product selection changes
   useEffect(() => {
     if (!watchProductId) return;
     const selectedProduct = products.find((p) => p.id === watchProductId);
     if (!selectedProduct) return;
 
-    // Set item name from product title
     setValue("item", selectedProduct.title);
-
-    // Set gold carat from product (default 18 if not present)
     setValue("gold_carat", selectedProduct.gold_carat || 18);
 
-    // Populate diamonds array from product's diamonds JSON
     let productDiamonds: any[] = [];
     if (selectedProduct.diamonds && Array.isArray(selectedProduct.diamonds)) {
       productDiamonds = selectedProduct.diamonds;
@@ -993,7 +1046,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
 
     if (productDiamonds.length > 0) {
-      // Replace the existing diamonds array with product diamonds
       const mapped = productDiamonds.map((d: any) => ({
         pcs: d.pcs || 0,
         carat: d.carat || 0,
@@ -1001,21 +1053,18 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
         type: d.type || "Diamond",
         packet_no: d.packet_no || "",
       }));
-      // Since useFieldArray doesn't have a direct replaceAll, we remove all and append
       const currentLength = fields.length;
       for (let i = 0; i < currentLength; i++) {
         remove(0);
       }
       mapped.forEach((d) => append(d));
     } else {
-      // If product has no diamonds, keep default empty entry
       const currentLength = fields.length;
       if (currentLength === 0) {
         append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" });
       }
     }
 
-    // Set product image preview from product's primary_image
     if (selectedProduct.primary_image) {
       const imgUrl = getAssetUrl(selectedProduct.primary_image);
       setImagePreview(imgUrl);
@@ -1078,6 +1127,10 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       if (data.customer_name) formData.append("customer_name", data.customer_name);
       if (data.craftsman_id) formData.append("craftsman_id", data.craftsman_id);
       if (data.craftsman_name) formData.append("craftman", data.craftsman_name);
+      
+      // New fields
+      if (data.remarks) formData.append("remarks", data.remarks);
+      if (data.conversion_rate) formData.append("conversion_rate", String(data.conversion_rate));
       
       if (data.product_image && data.product_image[0]) {
         formData.append("product_image", data.product_image[0]);
@@ -1358,6 +1411,37 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
                   className="w-full border rounded-lg p-2"
                   placeholder="0.00"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* New Fields: Remarks & Conversion */}
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-3">Additional Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Remarks</label>
+                <textarea
+                  {...register("remarks")}
+                  rows={3}
+                  className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Any notes or comments..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Conversion Rate (₹ → 1 USD)</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  {...register("conversion_rate", { valueAsNumber: true })}
+                  className="w-full border rounded-lg p-2"
+                  placeholder="e.g., 83.50"
+                />
+                {usdPreview !== null && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Estimated USD Selling Price: ${usdPreview.toFixed(2)}
+                  </p>
+                )}
               </div>
             </div>
           </div>
