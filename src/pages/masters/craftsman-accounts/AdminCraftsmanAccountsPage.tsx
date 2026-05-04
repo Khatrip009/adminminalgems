@@ -384,7 +384,7 @@ export default function AdminCraftsmanAccountsPage() {
                               <td className="px-4 py-2 text-sm">{entry.remark || ""}</td>
                               <td className="px-4 py-2 text-sm">{entry.cash_amount ? formatCurrency(entry.cash_amount) : "-"}</td>
                               <td className="px-4 py-2 text-sm">{entry.quantity_24kt ? formatGold(entry.quantity_24kt) : "-"}</td>
-                            </table>
+                            </tr>
                           ))}
                         </tbody>
                       </table>
