@@ -1,4 +1,4 @@
-// src/pages/LoginPage.tsx
+// src/pages/auth/LoginPage.tsx
 import React, { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
@@ -8,16 +8,23 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { from?: string } };
-  const { login } = useAuth(); // ✅ use the hook, no direct AuthContext
+  const location = useLocation();
+  const { login } = useAuth();
+
+  // Determine where to redirect after login:
+  // 1. Check sessionStorage (set by ProtectedRoute for deep links)
+  // 2. Fall back to location.state.from (if passed)
+  // 3. Default to admin dashboard
+  const fromPath =
+    sessionStorage.getItem("postLoginRedirect") ||
+    location.state?.from ||
+    "/admin";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const fromPath = location.state?.from || "/";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,10 +37,11 @@ export default function LoginPage() {
 
     try {
       setSubmitting(true);
-      // our AuthContext.login throws on failure
       await login(email, password);
 
       toast.success("Welcome back!");
+      // Clear the stored redirect (so it doesn't linger)
+      sessionStorage.removeItem("postLoginRedirect");
       navigate(fromPath, { replace: true });
     } catch (err: any) {
       console.error("Login error", err);
@@ -161,7 +169,7 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* For admin-only dashboard you can remove this if you don’t want public register */}
+            {/* Optional: Remove or keep the register link */}
             <p className="mt-5 text-center text-sm text-slate-500">
               Don&apos;t have an account yet?{" "}
               <Link
@@ -175,7 +183,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Move this later to global CSS if you want */}
       <style>{`
         .font-body {
           font-family: ui-sans-serif, system-ui, -apple-system, "Inter", Arial;

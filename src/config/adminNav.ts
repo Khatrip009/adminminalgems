@@ -56,6 +56,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
       // Warehouse route not yet implemented – commented out
       // { label: "Warehouses", path: "/admin/inventory/warehouses", icon: Store },
       { label: "Craftsmen", path: "/admin/craftsmen", icon: Users },
+      { label: "Craftsman Accounts", path: "/admin/craftsman-accounts", icon: Receipt },
       { label: "Suppliers", path: "/admin/suppliers", icon: Store },
       { label: "Customers", path: "/admin/customers", icon: Users },
     ],
