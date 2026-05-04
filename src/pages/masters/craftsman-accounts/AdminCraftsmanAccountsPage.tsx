@@ -328,7 +328,7 @@ export default function AdminCraftsmanAccountsPage() {
           {!loading && statement && statement.totals ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left side: 18Kt + Labour (now includes Item No) */}
+                {/* Left side: 18Kt + Labour (with Item No) */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Gold Consumed (18Kt) & Labour</CardTitle>
@@ -349,7 +349,7 @@ export default function AdminCraftsmanAccountsPage() {
                           {statement.leftEntries.map((entry, idx) => (
                             <tr key={idx}>
                               <td className="px-4 py-2 text-sm">{entry.date || ""}</td>
-                              <td className="px-4 py-2 text-sm">{entry.item_no || ""}</td>
+                              <td className="px-4 py-2 text-sm">{(entry as any).item_no || ""}</td>
                               <td className="px-4 py-2 text-sm">{entry.remark || ""}</td>
                               <td className="px-4 py-2 text-sm">{formatGold(entry.quantity_18kt)}</td>
                               <td className="px-4 py-2 text-sm">{formatCurrency(entry.labour_amount)}</td>
@@ -384,7 +384,7 @@ export default function AdminCraftsmanAccountsPage() {
                               <td className="px-4 py-2 text-sm">{entry.remark || ""}</td>
                               <td className="px-4 py-2 text-sm">{entry.cash_amount ? formatCurrency(entry.cash_amount) : "-"}</td>
                               <td className="px-4 py-2 text-sm">{entry.quantity_24kt ? formatGold(entry.quantity_24kt) : "-"}</td>
-                            </tr>
+                            </table>
                           ))}
                         </tbody>
                       </table>
@@ -548,7 +548,7 @@ export default function AdminCraftsmanAccountsPage() {
                           </tr>
                         ))}
                       </tbody>
-                    <tr>
+                    </table>
                   </div>
                 </CardContent>
               </Card>
