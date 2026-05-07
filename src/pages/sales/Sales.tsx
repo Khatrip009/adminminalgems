@@ -749,7 +749,7 @@ const Sales: React.FC = () => {
                                       <td className="border p-2">{money(d.amount)}</td>
                                       <td className="border p-2">{d.type || "Diamond"}</td>
                                       <td className="border p-2">{d.packet_no || "-"}</td>
-                                    </td>
+                                    </tr>
                                   ))}
                                 </tbody>
                               </table>
