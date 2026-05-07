@@ -1,4 +1,4 @@
-// src/pages/CategoriesPage.tsx
+// src/pages/masters/categories/CategoriesPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
@@ -97,7 +97,7 @@ const CategoriesPage: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const imageUploadRef = useRef<HTMLInputElement | null>(null); // NEW: for image upload
+  const imageUploadRef = useRef<HTMLInputElement | null>(null);
 
   const pageCount = useMemo(
     () => (total > 0 ? Math.ceil(total / limit) : 1),
@@ -288,7 +288,7 @@ const CategoriesPage: React.FC = () => {
         return;
       }
 
-      const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").trim());
+      const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim());
       const dataLines = lines.slice(1);
 
       let created = 0;
@@ -302,7 +302,7 @@ const CategoriesPage: React.FC = () => {
           const ch = line[i];
           if (ch === '"') {
             inQuote = !inQuote;
-          } else if (ch === ',' && !inQuote) {
+          } else if (ch === "," && !inQuote) {
             values.push(current);
             current = "";
           } else {
@@ -352,18 +352,16 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  // NEW: handle image file upload (converts to base64 and stores URL)
+  // Image upload handler
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    if (!file.type.startsWith("image/")) {
       toast.error("Please upload an image file (JPEG, PNG, GIF, etc.)");
       return;
     }
 
-    // Max size: 2MB
     if (file.size > 2 * 1024 * 1024) {
       toast.error("Image must be smaller than 2MB");
       return;
@@ -380,7 +378,6 @@ const CategoriesPage: React.FC = () => {
       toast.error("Failed to read image file");
     };
     reader.readAsDataURL(file);
-    // Clear input so the same file can be re-uploaded if needed
     e.target.value = "";
   };
 
@@ -437,7 +434,6 @@ const CategoriesPage: React.FC = () => {
           </div>
         )}
 
-        {/* FILTER BAR */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <form onSubmit={handleSearchSubmit} className="flex flex-1 items-center gap-3">
             <div className="relative flex-1">
@@ -453,7 +449,6 @@ const CategoriesPage: React.FC = () => {
                 className="w-full rounded-full border border-slate-300 bg-white py-3 pl-10 pr-3 text-base text-slate-900 shadow-sm focus:border-sky-500 focus:ring-sky-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
               />
             </div>
-
             <button
               type="submit"
               className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
@@ -472,7 +467,6 @@ const CategoriesPage: React.FC = () => {
           </button>
         </div>
 
-        {/* TABLE WITH IMAGE COLUMN */}
         <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-base text-slate-800 dark:text-slate-200">
@@ -485,7 +479,7 @@ const CategoriesPage: React.FC = () => {
                   <th className="px-6 py-4">Description</th>
                   <th className="px-6 py-4">Products</th>
                   <th className="px-6 py-4 text-right">Actions</th>
-                </td>
+                </tr>
               </thead>
               <tbody>
                 {loading ? (
@@ -514,7 +508,7 @@ const CategoriesPage: React.FC = () => {
                             alt={cat.name}
                             className="h-10 w-10 rounded object-cover"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         ) : (
@@ -566,7 +560,6 @@ const CategoriesPage: React.FC = () => {
             </table>
           </div>
 
-          {/* Pagination */}
           <div className="flex items-center justify-between px-6 py-3 text-sm text-slate-600 dark:text-slate-400">
             <div>
               Page {page} of {pageCount} · {total} categories
@@ -599,14 +592,13 @@ const CategoriesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL: CREATE / EDIT CATEGORY (high z-index + image upload dialog) */}
+      {/* MODAL – high z-index + image upload */}
       {modalOpen && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
-            {/* HEADER */}
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src="/minal_gems_logo.svg" className="h-10 w-auto" />
+                <img src="/minal_gems_logo.svg" className="h-10 w-auto" alt="logo" />
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                     {modalMode === "create" ? "Create Category" : "Edit Category"}
@@ -624,7 +616,6 @@ const CategoriesPage: React.FC = () => {
               </button>
             </div>
 
-            {/* FORM */}
             <form onSubmit={handleSubmit} className="space-y-4 text-base">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -632,9 +623,7 @@ const CategoriesPage: React.FC = () => {
                   <input
                     required
                     value={form.name}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   />
                 </div>
@@ -687,7 +676,7 @@ const CategoriesPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Image upload + preview (replaces URL input) */}
+              {/* Image upload instead of URL input */}
               <div>
                 <label className="block text-sm font-medium mb-1">Category Image</label>
                 <div className="flex items-center gap-3">
@@ -727,7 +716,7 @@ const CategoriesPage: React.FC = () => {
                       alt="Preview"
                       className="h-24 w-24 rounded border object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).style.display = "none";
                         toast.error("Invalid image");
                       }}
                     />
@@ -740,17 +729,13 @@ const CategoriesPage: React.FC = () => {
                 <textarea
                   rows={3}
                   value={form.description}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, description: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
               </div>
 
               <div className="flex items-center justify-between pt-4">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Required fields are marked with *
-                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Required fields are marked with *</p>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
