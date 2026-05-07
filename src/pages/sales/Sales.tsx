@@ -567,7 +567,7 @@ const Sales: React.FC = () => {
           )}
         </div>
 
-        {/* Table Section */}
+        {/* Table Section – fixed conversion_rate toFixed */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -674,7 +674,12 @@ const Sales: React.FC = () => {
                           {money(sale.profit_amount)}
                         </td>
                         <td className="p-3 border-b text-right font-bold text-gray-800">{money(sale.selling_price)}</td>
-                        <td className="p-3 border-b text-right">{sale.conversion_rate ? sale.conversion_rate.toFixed(4) : "—"}</td>
+                        {/* FIXED: Wrap conversion_rate in Number() before .toFixed */ }
+                        <td className="p-3 border-b text-right">
+                          {sale.conversion_rate !== undefined && sale.conversion_rate !== null 
+                            ? Number(sale.conversion_rate).toFixed(4) 
+                            : "—"}
+                        </td>
                         <td className="p-3 border-b text-right font-medium text-blue-600">{usdMoney(sale.final_amount_usd)}</td>
                         <td className="p-3 border-b max-w-xs truncate" title={sale.remarks || ""}>{sale.remarks || "—"}</td>
                         <td className="p-3 border-b max-w-xs truncate" title={sale.customer_name || ""}>{sale.customer_name || "—"}</td>
@@ -744,7 +749,7 @@ const Sales: React.FC = () => {
                                       <td className="border p-2">{money(d.amount)}</td>
                                       <td className="border p-2">{d.type || "Diamond"}</td>
                                       <td className="border p-2">{d.packet_no || "-"}</td>
-                                    </tr>
+                                    </td>
                                   ))}
                                 </tbody>
                               </table>
@@ -849,7 +854,7 @@ const Sales: React.FC = () => {
 };
 
 /* =========================================================
-   SALE MODAL (FORM) – with FIXED USD preview
+   SALE MODAL (FORM) – with safe number conversion
 ========================================================= */
 
 interface SaleModalProps {
@@ -902,7 +907,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     name: "diamonds",
   });
 
-  // Use watch for fields that don't need deep reactivity
   const watchGold = watch("gold");
   const watchGoldRate = watch("gold_rate");
   const watchGoldPrice = watch("gold_price");
@@ -910,25 +914,20 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
   const watchLabour = watch("labour_charge");
   const watchProfitPercent = watch("profit_percent");
   const watchConversionRate = watch("conversion_rate");
-
-  // Use useWatch for diamonds array to get reactive updates
   const diamondsArray = useWatch({ control, name: "diamonds" });
 
-  // Auto-calculate gold price when gold weight or rate changes
+  // Auto-calculate gold price
   useEffect(() => {
     if (watchGold && watchGoldRate && !watchGoldPrice) {
-      const calculated = watchGold * watchGoldRate;
-      setValue("gold_price", calculated);
+      setValue("gold_price", watchGold * watchGoldRate);
     }
   }, [watchGold, watchGoldRate, watchGoldPrice, setValue]);
 
-  // Calculate estimated selling price whenever diamonds, gold, labour, or profit changes
+  // Calculate estimated selling price
   useEffect(() => {
     let totalDiamond = 0;
     (diamondsArray || []).forEach(d => {
-      const carat = Number(d.carat) || 0;
-      const rate = Number(d.rate) || 0;
-      totalDiamond += carat * rate;
+      totalDiamond += (Number(d.carat) || 0) * (Number(d.rate) || 0);
     });
     const goldPriceVal = Number(watchGoldPrice) || 0;
     const labour = Number(watchLabour) || 0;
@@ -938,7 +937,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     setEstimatedSellingPrice(selling);
   }, [diamondsArray, watchGoldPrice, watchLabour, watchProfitPercent]);
 
-  // Update USD preview whenever estimated selling price or conversion rate changes
+  // Update USD preview
   useEffect(() => {
     const rate = Number(watchConversionRate) || 0;
     if (rate > 0 && estimatedSellingPrice > 0) {
@@ -948,7 +947,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [estimatedSellingPrice, watchConversionRate]);
 
-  // Load master data (products, customers, craftsmen)
+  // Load master data
   useEffect(() => {
     const loadMasters = async () => {
       try {
@@ -1003,11 +1002,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
               craftsman_id: sale.craftsman_id,
               craftsman_name: sale.craftsman_name || "",
               remarks: sale.remarks || "",
-              conversion_rate: sale.conversion_rate || 0,
+              conversion_rate: Number(sale.conversion_rate) || 0,
             });
-            if (sale.product_image_url) {
-              setImagePreview(sale.product_image_url);
-            }
+            if (sale.product_image_url) setImagePreview(sale.product_image_url);
           } else {
             toast.error("Failed to load sale details");
             onClose();
@@ -1021,7 +1018,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [editingId, reset, onClose]);
 
-  // Auto-fill product data when product selection changes
+  // Auto-fill product data
   useEffect(() => {
     if (!watchProductId) return;
     const selectedProduct = products.find((p) => p.id === watchProductId);
@@ -1054,16 +1051,12 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
         remove(0);
       }
       mapped.forEach((d) => append(d));
-    } else {
-      const currentLength = fields.length;
-      if (currentLength === 0) {
-        append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" });
-      }
+    } else if (fields.length === 0) {
+      append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" });
     }
 
     if (selectedProduct.primary_image) {
-      const imgUrl = getAssetUrl(selectedProduct.primary_image);
-      setImagePreview(imgUrl);
+      setImagePreview(getAssetUrl(selectedProduct.primary_image));
     } else {
       setImagePreview(null);
     }
@@ -1125,7 +1118,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       if (data.craftsman_name) formData.append("craftman", data.craftsman_name);
       if (data.remarks) formData.append("remarks", data.remarks);
       if (data.conversion_rate) formData.append("conversion_rate", String(data.conversion_rate));
-      
       if (data.product_image && data.product_image[0]) {
         formData.append("product_image", data.product_image[0]);
       }
