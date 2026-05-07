@@ -1,5 +1,6 @@
 // src/pages/masters/categories/CategoriesPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   Filter,
@@ -93,6 +94,7 @@ const CategoriesPage: React.FC = () => {
   const [form, setForm] = useState<CategoryFormState>(blankCategoryForm);
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState<string | null>(null);
@@ -132,6 +134,12 @@ const CategoriesPage: React.FC = () => {
   useEffect(() => {
     loadCategories();
   }, [tradeType]);
+
+  useEffect(() => {
+    if (modalOpen && modalContentRef.current) {
+      modalContentRef.current.scrollTop = 0;
+    }
+  }, [modalOpen]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -592,171 +600,176 @@ const CategoriesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL – high z-index + image upload */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img src="/minal_gems_logo.svg" className="h-10 w-auto" alt="logo" />
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-                    {modalMode === "create" ? "Create Category" : "Edit Category"}
-                  </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Manage product categories for the Minal Gems catalog.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-full border border-slate-300 p-2 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4 text-base">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Name *</label>
-                  <input
-                    required
-                    value={form.name}
-                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Slug</label>
-                  <input
-                    value={form.slug}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, slug: slugifyClient(e.target.value) }))
-                    }
-                    placeholder="auto-generated if empty"
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Trade Type</label>
-                  <select
-                    value={form.trade_type}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        trade_type: e.target.value as CategoryTradeType,
-                      }))
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    {TRADE_TYPE_OPTIONS.filter((t) => t.value).map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Sort Order</label>
-                  <input
-                    type="number"
-                    value={form.sort_order}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        sort_order: Number(e.target.value || 0),
-                      }))
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-
-              {/* Image upload instead of URL input */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Category Image</label>
+      {/* ================= MODAL – PORTAL (FIXED ABOVE TOPBAR) ================= */}
+      {modalOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[1000] flex items-start justify-center bg-black/40 backdrop-blur-sm">
+            <div
+              ref={modalContentRef}
+              className="w-full max-w-xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 my-8 mx-4 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => imageUploadRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                  >
-                    <ImagePlus size={18} />
-                    Upload Image
-                  </button>
-                  <input
-                    ref={imageUploadRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                  {form.image_url && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm((prev) => ({ ...prev, image_url: "" }));
-                        setImagePreview(null);
-                      }}
-                      className="text-red-500 hover:text-red-700 text-sm"
-                    >
-                      Remove
-                    </button>
-                  )}
+                  <img src="/minal_gems_logo.svg" className="h-10 w-auto" alt="logo" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+                      {modalMode === "create" ? "Create Category" : "Edit Category"}
+                    </h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      Manage product categories for the Minal Gems catalog.
+                    </p>
+                  </div>
                 </div>
-                {imagePreview && (
-                  <div className="mt-3">
-                    <p className="text-xs text-slate-500 mb-1">Preview:</p>
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="h-24 w-24 rounded border object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                        toast.error("Invalid image");
-                      }}
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-full border border-slate-300 p-2 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4 text-base">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Name *</label>
+                    <input
+                      required
+                      value={form.name}
+                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     />
                   </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
-                <textarea
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-4">
-                <p className="text-sm text-slate-500 dark:text-slate-400">Required fields are marked with *</p>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
-                  >
-                    {saving ? <Loader2 className="animate-spin" size={16} /> : "Save Category"}
-                  </button>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Slug</label>
+                    <input
+                      value={form.slug}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, slug: slugifyClient(e.target.value) }))
+                      }
+                      placeholder="auto-generated if empty"
+                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
                 </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Trade Type</label>
+                    <select
+                      value={form.trade_type}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          trade_type: e.target.value as CategoryTradeType,
+                        }))
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      {TRADE_TYPE_OPTIONS.filter((t) => t.value).map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Sort Order</label>
+                    <input
+                      type="number"
+                      value={form.sort_order}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          sort_order: Number(e.target.value || 0),
+                        }))
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Image upload + preview */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Category Image</label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => imageUploadRef.current?.click()}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      <ImagePlus size={18} />
+                      Upload Image
+                    </button>
+                    <input
+                      ref={imageUploadRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                    {form.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, image_url: "" }));
+                          setImagePreview(null);
+                        }}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {imagePreview && (
+                    <div className="mt-3">
+                      <p className="text-xs text-slate-500 mb-1">Preview:</p>
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="h-24 w-24 rounded border object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          toast.error("Invalid image");
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-4">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Required fields are marked with *</p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+                    >
+                      {saving ? <Loader2 className="animate-spin" size={16} /> : "Save Category"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
