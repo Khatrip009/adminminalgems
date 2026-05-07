@@ -1,5 +1,4 @@
 // src/pages/CategoriesPage.tsx
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
@@ -13,6 +12,7 @@ import {
   X,
   Upload,
   Download,
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -42,6 +42,7 @@ interface CategoryFormState {
   parent_id: string | null;
   sort_order: number;
   trade_type: CategoryTradeType;
+  image_url: string; // NEW
 }
 
 const blankCategoryForm: CategoryFormState = {
@@ -51,6 +52,7 @@ const blankCategoryForm: CategoryFormState = {
   parent_id: null,
   sort_order: 0,
   trade_type: "both",
+  image_url: "",
 };
 
 function slugifyClient(value: string): string {
@@ -90,6 +92,7 @@ const CategoriesPage: React.FC = () => {
   const [currentCategory, setCurrentCategory] = useState<Category | null>(null);
   const [form, setForm] = useState<CategoryFormState>(blankCategoryForm);
   const [saving, setSaving] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // CSV import
   const [importing, setImporting] = useState(false);
@@ -141,6 +144,7 @@ const CategoriesPage: React.FC = () => {
     setModalMode("create");
     setCurrentCategory(null);
     setForm(blankCategoryForm);
+    setImagePreview(null);
     setModalOpen(true);
   };
 
@@ -154,7 +158,9 @@ const CategoriesPage: React.FC = () => {
       parent_id: cat.parent_id || null,
       sort_order: typeof cat.sort_order === "number" ? cat.sort_order : 0,
       trade_type: (cat.trade_type || "both") as CategoryTradeType,
+      image_url: cat.image_url || "",
     });
+    setImagePreview(cat.image_url || null);
     setModalOpen(true);
   };
 
@@ -184,6 +190,7 @@ const CategoriesPage: React.FC = () => {
         parent_id: form.parent_id || undefined,
         sort_order: form.sort_order,
         trade_type: form.trade_type,
+        image_url: form.image_url || null, // send empty string as null
       };
 
       if (modalMode === "create") {
@@ -202,6 +209,7 @@ const CategoriesPage: React.FC = () => {
       setModalOpen(false);
       setCurrentCategory(null);
       setForm(blankCategoryForm);
+      setImagePreview(null);
     } catch (err) {
       console.error("Failed to save category", err);
       toast.error("Failed to save category.");
@@ -210,7 +218,7 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  // CSV EXPORT
+  // CSV EXPORT (includes image_url)
   const handleExportCsv = () => {
     if (!categories.length) {
       toast("No categories to export.", { icon: "ℹ️" });
@@ -224,6 +232,7 @@ const CategoriesPage: React.FC = () => {
       "description",
       "sort_order",
       "product_count",
+      "image_url",
     ];
     const rows = categories.map((c) => [
       c.name ?? "",
@@ -232,6 +241,7 @@ const CategoriesPage: React.FC = () => {
       (c.description ?? "").replace(/"/g, '""'),
       c.sort_order ?? 0,
       c.product_count ?? 0,
+      c.image_url ?? "",
     ]);
 
     const csvLines = [
@@ -250,7 +260,7 @@ const CategoriesPage: React.FC = () => {
     toast.success("Categories exported as CSV.");
   };
 
-  // CSV IMPORT
+  // CSV IMPORT (supports image_url)
   const handleImportClick = () => {
     setImportSummary(null);
     fileInputRef.current?.click();
@@ -280,34 +290,50 @@ const CategoriesPage: React.FC = () => {
         return;
       }
 
-      const [, ...dataLines] = lines;
+      // First line: headers
+      const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g, "").trim());
+      const dataLines = lines.slice(1);
 
       let created = 0;
       let failed = 0;
 
       for (const line of dataLines) {
-        const cols = line.split(",");
+        // Simple CSV parsing (handles quoted fields)
+        const values: string[] = [];
+        let inQuote = false;
+        let current = "";
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            inQuote = !inQuote;
+          } else if (ch === ',' && !inQuote) {
+            values.push(current);
+            current = "";
+          } else {
+            current += ch;
+          }
+        }
+        values.push(current);
 
-        const name = cols[0]?.replace(/^"|"$/g, "")?.trim();
-        if (!name) {
+        const record: any = {};
+        headers.forEach((h, idx) => {
+          let val = values[idx]?.replace(/^"|"$/g, "")?.trim() || "";
+          record[h] = val;
+        });
+
+        if (!record.name) {
           failed++;
           continue;
         }
 
-        const slug = cols[1]?.replace(/^"|"$/g, "")?.trim() || "";
-        const trade_type =
-          (cols[2]?.replace(/^"|"$/g, "").trim() as CategoryTradeType) ||
-          "both";
-        const description = cols[3]?.replace(/^"|"$/g, "") || "";
-        const sort_order = Number(cols[4] || 0);
-
         try {
           await createCategory({
-            name,
-            slug: slug || slugifyClient(name),
-            trade_type,
-            description,
-            sort_order: Number.isNaN(sort_order) ? 0 : sort_order,
+            name: record.name,
+            slug: record.slug || slugifyClient(record.name),
+            trade_type: (record.trade_type as CategoryTradeType) || "both",
+            description: record.description || undefined,
+            sort_order: parseInt(record.sort_order) || 0,
+            image_url: record.image_url || null,
           });
           created++;
         } catch (err) {
@@ -328,6 +354,12 @@ const CategoriesPage: React.FC = () => {
     } finally {
       setImporting(false);
     }
+  };
+
+  // Helper to update image preview live
+  const handleImageUrlChange = (url: string) => {
+    setForm((prev) => ({ ...prev, image_url: url }));
+    setImagePreview(url);
   };
 
   return (
@@ -419,12 +451,13 @@ const CategoriesPage: React.FC = () => {
           </button>
         </div>
 
-        {/* TABLE */}
+        {/* TABLE WITH IMAGE COLUMN */}
         <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-base text-slate-800 dark:text-slate-200">
               <thead className="bg-slate-100 text-sm uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
+                  <th className="px-6 py-4">Image</th>
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Slug</th>
                   <th className="px-6 py-4">Trade Type</th>
@@ -436,14 +469,14 @@ const CategoriesPage: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-lg">
+                    <td colSpan={7} className="py-8 text-center text-lg">
                       <Loader2 className="mx-auto animate-spin" />
                       Loading...
                     </td>
                   </tr>
                 ) : categories.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-lg">
+                    <td colSpan={7} className="py-8 text-center text-lg">
                       No categories found
                     </td>
                   </tr>
@@ -453,28 +486,44 @@ const CategoriesPage: React.FC = () => {
                       key={cat.id}
                       className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
                     >
+                      <td className="px-6 py-4">
+                        {cat.image_url ? (
+                          <img
+                            src={cat.image_url}
+                            alt={cat.name}
+                            className="h-10 w-10 rounded object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+                            <ImageIcon size={20} />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-6 py-4 font-medium flex items-center gap-2">
                         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                           <FolderTree size={16} />
                         </span>
                         {cat.name}
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
                         {cat.slug}
-                      </td>
+                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
                           {cat.trade_type}
                         </span>
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
                         {cat.description || "—"}
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-sm">
                         {typeof cat.product_count === "number"
                           ? cat.product_count
                           : "—"}
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
                         <button
                           onClick={() => openEditModal(cat)}
@@ -488,8 +537,8 @@ const CategoriesPage: React.FC = () => {
                         >
                           <Trash2 size={14} /> Delete
                         </button>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   ))
                 )}
               </tbody>
@@ -529,7 +578,7 @@ const CategoriesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL: CREATE / EDIT CATEGORY */}
+      {/* MODAL: CREATE / EDIT CATEGORY (with image input + preview) */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-2xl border border-slate-300 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-950">
@@ -615,6 +664,32 @@ const CategoriesPage: React.FC = () => {
                     className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   />
                 </div>
+              </div>
+
+              {/* Image URL field with preview */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Category Image URL</label>
+                <input
+                  type="text"
+                  value={form.image_url}
+                  onChange={(e) => handleImageUrlChange(e.target.value)}
+                  placeholder="https://example.com/category-image.jpg or /uploads/category/..."
+                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+                {imagePreview && (
+                  <div className="mt-2">
+                    <p className="text-xs text-slate-500 mb-1">Preview:</p>
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="h-20 w-20 rounded border object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        toast.error("Invalid image URL");
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>

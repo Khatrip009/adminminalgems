@@ -1,3 +1,4 @@
+// src/api/masters/categories.api.ts
 import { api, API_ROUTES } from "@/lib/apiClient";
 
 /**
@@ -22,7 +23,8 @@ export interface Category {
   description?: string | null;
   parent_id?: string | null;
   trade_type: TradeType;
-  product_count?: number;
+  image_url?: string | null;          // NEW: category image URL or path
+  product_count?: number;              // only when include_counts=true
 }
 
 export interface CategoryListResponse {
@@ -88,6 +90,7 @@ export async function createCategory(payload: {
   parent_id?: string | null;
   sort_order?: number;
   trade_type?: TradeType;
+  image_url?: string | null;          // NEW: optional category image URL
 }) {
   return api.post<{ ok: boolean; category: Category }>(
     BASE,
@@ -107,6 +110,7 @@ export async function updateCategory(
     parent_id?: string | null;
     sort_order?: number;
     trade_type?: TradeType;
+    image_url?: string | null;          // NEW: optional category image URL
   }
 ) {
   if (!id) throw new Error("category_id_required");

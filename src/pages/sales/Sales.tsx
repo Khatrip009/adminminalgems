@@ -1,7 +1,7 @@
 // src/pages/sales/Sales.tsx
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "react-hot-toast";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import {
   Download,
   FileText,
@@ -88,7 +88,6 @@ interface Sale {
   craftsman_id?: string | null;
   craftsman_name?: string;
   created_at: string;
-  // New fields
   remarks?: string;
   conversion_rate?: number;
   final_amount_usd?: number;
@@ -110,7 +109,6 @@ interface SaleFormValues {
   craftsman_id?: string | null;
   craftsman_name?: string;
   product_image?: FileList | null;
-  // New fields
   remarks?: string;
   conversion_rate?: number;
 }
@@ -136,11 +134,6 @@ const usdMoney = (v?: number | string) =>
       })}`;
 
 const dateFmt = (d: string) => new Date(d).toLocaleDateString("en-IN");
-
-// Auto-calculate gold price
-const calculateGoldPrice = (gold: number, goldRate: number) => {
-  return gold * goldRate;
-};
 
 /* =========================================================
    MAIN COMPONENT
@@ -856,7 +849,7 @@ const Sales: React.FC = () => {
 };
 
 /* =========================================================
-   SALE MODAL (FORM)
+   SALE MODAL (FORM) – with FIXED USD preview
 ========================================================= */
 
 interface SaleModalProps {
@@ -872,6 +865,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
   const [craftsmen, setCraftsmen] = useState<any[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [usdPreview, setUsdPreview] = useState<number | null>(null);
+  const [estimatedSellingPrice, setEstimatedSellingPrice] = useState<number>(0);
 
   const {
     register,
@@ -908,22 +902,19 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     name: "diamonds",
   });
 
+  // Use watch for fields that don't need deep reactivity
   const watchGold = watch("gold");
   const watchGoldRate = watch("gold_rate");
   const watchGoldPrice = watch("gold_price");
   const watchProductId = watch("product_id");
-  const watchSellingPrice = watch("gold_price") + watch("labour_charge") + (() => {
-    let totalDiamond = 0;
-    const diamonds = watch("diamonds") || [];
-    diamonds.forEach(d => {
-      totalDiamond += (d.carat || 0) * (d.rate || 0);
-    });
-    return totalDiamond;
-  })(); // This is simplified; the actual selling price is computed on backend, but we can estimate
+  const watchLabour = watch("labour_charge");
+  const watchProfitPercent = watch("profit_percent");
   const watchConversionRate = watch("conversion_rate");
-  const watchRemarks = watch("remarks");
 
-  // Auto-calculate gold price when gold or gold_rate changes
+  // Use useWatch for diamonds array to get reactive updates
+  const diamondsArray = useWatch({ control, name: "diamonds" });
+
+  // Auto-calculate gold price when gold weight or rate changes
   useEffect(() => {
     if (watchGold && watchGoldRate && !watchGoldPrice) {
       const calculated = watchGold * watchGoldRate;
@@ -931,26 +922,31 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
     }
   }, [watchGold, watchGoldRate, watchGoldPrice, setValue]);
 
-  // Compute USD preview when selling price or conversion rate changes
+  // Calculate estimated selling price whenever diamonds, gold, labour, or profit changes
   useEffect(() => {
-    // This is a preview; actual USD is stored in DB after submission.
-    // We'll calculate total diamond amount from fields
     let totalDiamond = 0;
-    const diamonds = watch("diamonds") || [];
-    diamonds.forEach(d => {
-      totalDiamond += (d.carat || 0) * (d.rate || 0);
+    (diamondsArray || []).forEach(d => {
+      const carat = Number(d.carat) || 0;
+      const rate = Number(d.rate) || 0;
+      totalDiamond += carat * rate;
     });
-    const goldPriceVal = watch("gold_price") || 0;
-    const labour = watch("labour_charge") || 0;
+    const goldPriceVal = Number(watchGoldPrice) || 0;
+    const labour = Number(watchLabour) || 0;
     const totalMaking = totalDiamond + goldPriceVal + labour;
-    const profitPct = watch("profit_percent") || 0;
+    const profitPct = Number(watchProfitPercent) || 0;
     const selling = totalMaking * (1 + profitPct / 100);
-    if (watchConversionRate && watchConversionRate > 0) {
-      setUsdPreview(selling / watchConversionRate);
+    setEstimatedSellingPrice(selling);
+  }, [diamondsArray, watchGoldPrice, watchLabour, watchProfitPercent]);
+
+  // Update USD preview whenever estimated selling price or conversion rate changes
+  useEffect(() => {
+    const rate = Number(watchConversionRate) || 0;
+    if (rate > 0 && estimatedSellingPrice > 0) {
+      setUsdPreview(estimatedSellingPrice / rate);
     } else {
       setUsdPreview(null);
     }
-  }, [watch("diamonds"), watch("gold_price"), watch("labour_charge"), watch("profit_percent"), watchConversionRate]);
+  }, [estimatedSellingPrice, watchConversionRate]);
 
   // Load master data (products, customers, craftsmen)
   useEffect(() => {
@@ -1127,8 +1123,6 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
       if (data.customer_name) formData.append("customer_name", data.customer_name);
       if (data.craftsman_id) formData.append("craftsman_id", data.craftsman_id);
       if (data.craftsman_name) formData.append("craftman", data.craftsman_name);
-      
-      // New fields
       if (data.remarks) formData.append("remarks", data.remarks);
       if (data.conversion_rate) formData.append("conversion_rate", String(data.conversion_rate));
       
@@ -1415,7 +1409,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ editingId, onClose, onSuccess }) 
             </div>
           </div>
 
-          {/* New Fields: Remarks & Conversion */}
+          {/* Additional Information */}
           <div className="border-t pt-4">
             <h3 className="font-semibold mb-3">Additional Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
