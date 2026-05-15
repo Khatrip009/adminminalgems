@@ -555,8 +555,13 @@ const AdminOrderDetailPage: React.FC = () => {
               {/* Right column: Shipments + Items */}
               <div className="space-y-4">
                 {/* ✅ Replaced with the reusable OrderShipments component */}
-                <OrderShipments orderId={order.id} />
-
+              <OrderShipments
+                  orderId={order.id}
+                  orderItems={items.map((it) => ({
+                    id: it.id,
+                    title: it.product_title || it.title || "Unknown product",
+                  }))}
+                />
                 {/* Items card */}
                 <div className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <div className="mb-3 flex items-center justify-between gap-2">

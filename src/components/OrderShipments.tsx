@@ -27,14 +27,20 @@ interface ShipmentItem {
   created_at: string;
 }
 
+interface OrderItemOption {
+  id: string;
+  title: string;
+}
+
 const SHIPMENT_STATUSES = ["pending", "shipped", "delivered", "cancelled"];
 
 /* --------------- COMPONENT --------------- */
 interface Props {
   orderId: string;
+  orderItems?: OrderItemOption[];   // optional list of order items to pick from
 }
 
-export const OrderShipments: React.FC<Props> = ({ orderId }) => {
+export const OrderShipments: React.FC<Props> = ({ orderId, orderItems }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -149,21 +155,22 @@ export const OrderShipments: React.FC<Props> = ({ orderId }) => {
     }
   };
 
-  // ---------- Add item to shipment ----------
+  // ---------- Add item to shipment (uses dropdown if orderItems provided) ----------
   const handleAddItem = async (shipmentId: string) => {
-    if (!itemOrderItemId.trim()) {
-      toast.error("Order item ID required");
+    const selectedId = itemOrderItemId.trim();
+    if (!selectedId) {
+      toast.error("Please select an item");
       return;
     }
     try {
       const res = await api.post(`/logistics/shipments/${shipmentId}/items`, {
-        order_item_id: itemOrderItemId.trim(),
+        order_item_id: selectedId,
         quantity: itemQuantity,
       });
       if (res.ok) {
         toast.success("Item added");
         loadItems(shipmentId);
-        setItemOrderItemId("");
+        setItemOrderItemId(orderItems && orderItems.length > 0 ? orderItems[0].id : "");
         setItemQuantity(1);
         setAddingItem(false);
       } else {
@@ -187,6 +194,17 @@ export const OrderShipments: React.FC<Props> = ({ orderId }) => {
     } catch (err) {
       toast.error("Error removing item");
     }
+  };
+
+  // Pre‑select first item when opening the "add item" form (if orderItems available)
+  const openAddItem = () => {
+    if (orderItems && orderItems.length > 0) {
+      setItemOrderItemId(orderItems[0].id);
+    } else {
+      setItemOrderItemId("");
+    }
+    setItemQuantity(1);
+    setAddingItem(true);
   };
 
   return (
@@ -306,20 +324,35 @@ export const OrderShipments: React.FC<Props> = ({ orderId }) => {
                 )}
                 {!addingItem ? (
                   <button
-                    onClick={() => setAddingItem(true)}
+                    onClick={openAddItem}
                     className="text-blue-600 text-xs hover:underline"
                   >
                     + Add item
                   </button>
                 ) : (
                   <div className="flex gap-2 items-end">
-                    <input
-                      type="text"
-                      placeholder="Order item ID"
-                      value={itemOrderItemId}
-                      onChange={(e) => setItemOrderItemId(e.target.value)}
-                      className="border rounded p-1 text-sm w-32"
-                    />
+                    {/* Dropdown or manual input */}
+                    {orderItems && orderItems.length > 0 ? (
+                      <select
+                        value={itemOrderItemId}
+                        onChange={(e) => setItemOrderItemId(e.target.value)}
+                        className="border rounded p-1 text-sm"
+                      >
+                        {orderItems.map((oi) => (
+                          <option key={oi.id} value={oi.id}>
+                            {oi.title}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Order item ID"
+                        value={itemOrderItemId}
+                        onChange={(e) => setItemOrderItemId(e.target.value)}
+                        className="border rounded p-1 text-sm w-32"
+                      />
+                    )}
                     <input
                       type="number"
                       min={1}
