@@ -5,6 +5,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./layouts/AdminLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import InstallBanner from "./components/InstallBanner";          // ✅ added
 
 // PUBLIC
 import LoginPage from "./pages/auth/LoginPage";
@@ -96,6 +97,7 @@ const App: React.FC = () => {
   return (
     <>
       <PWAInstallPrompt />
+      <InstallBanner />      {/* ✅ added – shows custom install banner */}
 
       <Routes>
         {/* Redirect root to admin */}
@@ -121,7 +123,6 @@ const App: React.FC = () => {
           {/* Reports / CRM */}
           <Route path="analytics" element={<AdminAnalyticsOverviewPage />} />
           <Route path="leads" element={<LeadsPage />} />
-          {/* ✅ Notifications – now using the full admin page */}
           <Route path="notifications" element={<AdminNotificationsPage />} />
 
           {/* Masters */}
