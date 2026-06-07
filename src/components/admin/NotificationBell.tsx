@@ -36,14 +36,18 @@ export default function NotificationBell({ muted = false }: Props) {
     } catch {}
   };
 
-  // Close on outside click
+  // Close on outside click (touch/mouse)
   useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
+    const onDoc = (e: MouseEvent | TouchEvent) => {
       if (!ref.current) return;
       if (!ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
   }, []);
 
   // Load first page when dropdown opens
@@ -110,115 +114,152 @@ export default function NotificationBell({ muted = false }: Props) {
     }
   };
 
-  // Dropdown content (will be portaled to document.body)
+  // Dropdown positioning – recalc on open and window resize
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  useEffect(() => {
+    if (!open || !ref.current) return;
+    const updatePosition = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (!rect) return;
+      const top = rect.bottom + 8;
+      const right = window.innerWidth - rect.right;
+      let left = rect.right - 320;
+      if (left < 8) left = 8;
+      setDropdownStyle({
+        position: "fixed",
+        top: top,
+        right: right > 0 ? right : "auto",
+        left: left > 0 ? left : "auto",
+        maxWidth: "calc(100vw - 16px)",
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [open]);
+
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return "";
+    try {
+      return new Date(dateStr).toLocaleString();
+    } catch {
+      return "";
+    }
+  };
+
+  // Dropdown content (portaled to body)
   const dropdownContent = open && (
-    <div
-      className="fixed right-0 mt-3 w-96 max-w-[95vw] rounded-2xl border border-slate-200 bg-white dark:bg-slate-900/95 shadow-xl backdrop-blur-md p-2 text-sm dark:border-slate-700 z-[1000]"
-      style={{
-        top: ref.current ? ref.current.getBoundingClientRect().bottom + 8 : "auto",
-        right: "1rem",
-      }}
-    >
-      <div className="flex items-center justify-between px-2 pb-1">
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] font-semibold uppercase text-slate-600 dark:text-slate-400">
-            Notifications
-          </span>
-          <button
-            className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-            onClick={() =>
-              markAllRead()
-                .then(() => toast.success("All marked read"))
-                .catch(() => toast.error("Failed"))
-            }
-          >
-            Mark all read
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="text-xs text-slate-400 hover:text-slate-600"
-            onClick={() => {
-              setOpen(false);
-              navigate("/admin/notifications");
-            }}
-          >
-            View all
-          </button>
-          <button
-            className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
-            onClick={() => setOpen(false)}
-          >
-            <X className="h-4 w-4 text-slate-400" />
-          </button>
-        </div>
-      </div>
-
+    <>
+      {/* Backdrop for mobile – easier to tap outside */}
       <div
-        ref={scrollContainerRef}
-        className="max-h-80 overflow-auto space-y-1 pr-1"
+        className="fixed inset-0 z-[999] bg-black/20 md:hidden"
+        onClick={() => setOpen(false)}
+      />
+      <div
+        className="fixed z-[1000] w-[calc(100vw-32px)] max-w-md rounded-2xl border border-slate-200 bg-white dark:bg-slate-900/95 shadow-xl backdrop-blur-md p-2 text-sm dark:border-slate-700"
+        style={dropdownStyle}
       >
-        {loading && (
-          <div className="p-3 text-xs text-slate-500 dark:text-slate-400">
-            Loading…
-          </div>
-        )}
-        {!loading && items.length === 0 && (
-          <div className="p-3 text-xs text-slate-500 dark:text-slate-400">
-            No notifications.
-          </div>
-        )}
-        {!loading &&
-          items.map((n) => (
-            <div
-              key={n.id}
-              className="flex items-start gap-3 rounded-xl p-3 hover:bg-sky-50 dark:hover:bg-slate-800 transition"
+        <div className="flex items-center justify-between px-2 pb-1">
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] font-semibold uppercase text-slate-600 dark:text-slate-400">
+              Notifications
+            </span>
+            <button
+              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              onClick={() =>
+                markAllRead()
+                  .then(() => toast.success("All marked read"))
+                  .catch(() => toast.error("Failed"))
+              }
             >
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div className="font-semibold text-[13px]">{n.title}</div>
-                  <div className="text-[11px] text-slate-400">
-                    {new Date(n.created_at).toLocaleString()}
-                  </div>
-                </div>
-                {n.body && (
-                  <div className="mt-1 text-[13px] text-slate-600 dark:text-slate-300 line-clamp-2">
-                    {n.body}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => handleMarkRead(n.id)}
-                className="text-xs text-sky-600 dark:text-sky-400 hover:underline"
-              >
-                Mark read
-              </button>
-            </div>
-          ))}
-      </div>
+              Mark all read
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="text-xs text-slate-400 hover:text-slate-600"
+              onClick={() => {
+                setOpen(false);
+                navigate("/admin/notifications");
+              }}
+            >
+              View all
+            </button>
+            <button
+              className="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={() => setOpen(false)}
+            >
+              <X className="h-4 w-4 text-slate-400" />
+            </button>
+          </div>
+        </div>
 
-      <div className="mt-2 flex items-center justify-between px-2">
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          Page {page} / {pages}
+        <div
+          ref={scrollContainerRef}
+          className="max-h-[60vh] overflow-y-auto space-y-1 pr-1"
+        >
+          {loading && (
+            <div className="p-3 text-xs text-slate-500 dark:text-slate-400">
+              Loading…
+            </div>
+          )}
+          {!loading && items.length === 0 && (
+            <div className="p-3 text-xs text-slate-500 dark:text-slate-400">
+              No notifications.
+            </div>
+          )}
+          {!loading &&
+            items.map((n) => (
+              <div
+                key={n.id}
+                className="flex items-start gap-3 rounded-xl p-3 hover:bg-sky-50 dark:hover:bg-slate-800 transition"
+              >
+                <div className="flex-1">
+                  <div className="flex flex-wrap justify-between items-start gap-1">
+                    <div className="font-semibold text-[13px]">{n.title}</div>
+                    <div className="text-[11px] text-slate-400 whitespace-nowrap">
+                      {formatDate(n.created_at)}
+                    </div>
+                  </div>
+                  {n.body && (
+                    <div className="mt-1 text-[13px] text-slate-600 dark:text-slate-300 line-clamp-2">
+                      {n.body}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleMarkRead(n.id)}
+                  className="shrink-0 text-xs text-sky-600 dark:text-sky-400 hover:underline px-2 py-1 rounded-md touch-manipulation"
+                >
+                  Mark read
+                </button>
+              </div>
+            ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            disabled={page <= 1}
-            onClick={() => handleLoadPage(page - 1)}
-            className="px-2 py-1 rounded-md text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
-          >
-            Prev
-          </button>
-          <button
-            disabled={page >= pages}
-            onClick={() => handleLoadPage(page + 1)}
-            className="px-2 py-1 rounded-md text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
-          >
-            Next
-          </button>
+
+        <div className="mt-2 flex items-center justify-between px-2">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            Page {page} / {pages}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => handleLoadPage(page - 1)}
+              className="rounded-md border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              Prev
+            </button>
+            <button
+              disabled={page >= pages}
+              onClick={() => handleLoadPage(page + 1)}
+              className="rounded-md border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 
   return (
@@ -239,7 +280,6 @@ export default function NotificationBell({ muted = false }: Props) {
         </button>
       </div>
 
-      {/* Portal to body so it appears above everything */}
       {dropdownContent && createPortal(dropdownContent, document.body)}
     </>
   );

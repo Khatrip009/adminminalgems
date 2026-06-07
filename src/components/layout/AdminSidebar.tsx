@@ -1,13 +1,16 @@
+// src/components/layout/AdminSidebar.tsx
 import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { X, ChevronDown } from "lucide-react";
 import { ADMIN_NAV_SECTIONS } from "../../config/adminNav";
 import { useAuth } from "../../context/AuthContext";
 
-const AdminSidebar: React.FC<{
+interface AdminSidebarProps {
   variant?: "desktop" | "mobile";
   onCloseMobile?: () => void;
-}> = ({ variant = "desktop", onCloseMobile }) => {
+}
+
+const AdminSidebar: React.FC<AdminSidebarProps> = ({ variant = "desktop", onCloseMobile }) => {
   const { user } = useAuth();
   const location = useLocation();
   const isMobile = variant === "mobile";
@@ -120,6 +123,7 @@ const AdminSidebar: React.FC<{
                     <NavLink
                       key={item.path}
                       to={item.path}
+                      onClick={isMobile ? onCloseMobile : undefined}
                       className={({ isActive }) =>
                         `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
                           isActive

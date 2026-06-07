@@ -1,3 +1,4 @@
+// src/layouts/AdminLayout.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Outlet } from "react-router-dom";
 import AdminTopbar from "../components/layout/AdminTopbar";
@@ -7,7 +8,7 @@ import { WarehouseProvider } from "@/context/WarehouseContext";
 const AdminLayout: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // ── Handlers ───────────────────────────────────────
+  // Handlers
   const openMobileSidebar = useCallback(() => setMobileSidebarOpen(true), []);
   const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
   const toggleMobileSidebar = useCallback(
@@ -15,7 +16,7 @@ const AdminLayout: React.FC = () => {
     []
   );
 
-  // ── Lock body scroll when sidebar is open ─────────
+  // Lock body scroll when sidebar is open
   useEffect(() => {
     if (mobileSidebarOpen) {
       document.body.style.overflow = "hidden";

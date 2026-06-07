@@ -1,10 +1,10 @@
+// src/components/admin/ProductPreview.tsx
 import React, {
   useEffect,
   useMemo,
   useState,
-  TouchEvent,
-  MouseEvent,
 } from "react";
+import type { TouchEvent, MouseEvent } from "react";
 import {
   X,
   Heart,
@@ -20,32 +20,9 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 
 /* -------------------------------------------------
-   Allow <model-viewer> in TSX without type errors
+   model-viewer is already declared in src/types/model-viewer.d.ts
+   No need to redeclare here.
 -------------------------------------------------- */
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      "model-viewer": React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement>,
-        HTMLElement
-      > & {
-        src?: string;
-        poster?: string;
-        "camera-controls"?: boolean;
-        "auto-rotate"?: boolean;
-        ar?: boolean;
-        "ar-modes"?: string;
-        "shadow-intensity"?: string | number;
-        "camera-orbit"?: string;
-        "exposure"?: string | number;
-      };
-    }
-  }
-}
-
-/* ----------------------------
-   Types (match your usage)
------------------------------ */
 
 interface PreviewAsset {
   id: string;
@@ -75,12 +52,9 @@ interface ProductPreviewProps {
   onClose: () => void;
 }
 
-/* ----------------------------
-   Minimal standalone PriceTag
------------------------------ */
 function PriceTagMini({ price, currency }: { price: number; currency: string }) {
   return (
-    <div className="text-3xl font-semibold text-rose-600 mt-2">
+    <div className="text-2xl sm:text-3xl font-semibold text-rose-600 mt-2">
       {currency}{" "}
       {Number(price || 0).toLocaleString("en-IN", {
         minimumFractionDigits: 0,
@@ -90,15 +64,12 @@ function PriceTagMini({ price, currency }: { price: number; currency: string }) 
   );
 }
 
-/* ----------------------------
-   Minimal standalone RatingStars
------------------------------ */
 function RatingStarsMini() {
   const stars = [1, 2, 3, 4, 5];
   return (
     <div className="flex items-center gap-1 mt-1">
       {stars.map((s) => (
-        <span key={s} className="text-yellow-400 text-lg">
+        <span key={s} className="text-yellow-400 text-base sm:text-lg">
           ★
         </span>
       ))}
@@ -106,10 +77,6 @@ function RatingStarsMini() {
     </div>
   );
 }
-
-/* ----------------------------
-   Helpers
------------------------------ */
 
 const isImage = (a: PreviewAsset) =>
   a.asset_type === "image" || (a.file_type || "").startsWith("image/");
@@ -129,9 +96,11 @@ const is3D = (a: PreviewAsset) => {
   );
 };
 
-/* ----------------------------
-   MAIN PREVIEW COMPONENT
------------------------------ */
+// Detect touch device
+const isTouchDevice = () => {
+  if (typeof window === "undefined") return false;
+  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+};
 
 const ProductPreview: React.FC<ProductPreviewProps> = ({
   product,
@@ -142,11 +111,9 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
   const [isDark, setIsDark] = useState(false);
   const [deviceMode, setDeviceMode] = useState<"desktop" | "mobile">("desktop");
 
-  // Zoom state (desktop image zoom)
+  // Zoom state (desktop only)
   const [isZooming, setIsZooming] = useState(false);
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
-
-  // Touch swipe state
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const assets: PreviewAsset[] = useMemo(
@@ -165,7 +132,6 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
 
   const activeAsset = sortedAssets[activeIndex] || sortedAssets[0] || null;
 
-  // Reset active asset when product / open changes
   useEffect(() => {
     if (!open) return;
     if (!sortedAssets.length) return;
@@ -188,7 +154,6 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
     );
   };
 
-  // Touch handlers for swipe navigation
   const handleTouchStart = (e: TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
     setTouchStartX(touch.clientX);
@@ -198,18 +163,15 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
     if (touchStartX === null) return;
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - touchStartX;
-    const threshold = 40; // px
+    const threshold = 40;
     if (deltaX > threshold) {
-      // swipe right -> previous
       goPrev();
     } else if (deltaX < -threshold) {
-      // swipe left -> next
       goNext();
     }
     setTouchStartX(null);
   };
 
-  // Zoom handling for images (only on desktop / non-mobile mode)
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
     if (!activeAsset || !isImage(activeAsset)) return;
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
@@ -220,6 +182,7 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
 
   const handleMouseEnter = () => {
     if (!activeAsset || !isImage(activeAsset)) return;
+    if (isTouchDevice()) return;
     setIsZooming(true);
   };
 
@@ -227,7 +190,6 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
     setIsZooming(false);
   };
 
-  // Close on ESC
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -241,135 +203,125 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
   const modalBg = isDark ? "bg-slate-900 text-slate-50" : "bg-white text-slate-900";
   const borderColor = isDark ? "border-slate-700" : "border-slate-200";
 
-  // If not open or no product, don't render
   return (
     <AnimatePresence>
       {open && product && (
         <motion.div
           key="preview-overlay"
-          className={`fixed inset-0 z-[200] flex items-center justify-center ${overlayBg} backdrop-blur-sm`}
+          className={`fixed inset-0 z-[200] flex items-center justify-center ${overlayBg} backdrop-blur-sm p-2 sm:p-4`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* CLICK OUTSIDE TO CLOSE */}
-          <div
-            className="absolute inset-0"
-            onClick={onClose}
-          />
+          <div className="absolute inset-0" onClick={onClose} />
 
           <motion.div
             key="preview-modal"
-            className={`relative w-[95vw] max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl ${modalBg} border ${borderColor}`}
+            className={`relative w-full max-w-6xl max-h-[95vh] overflow-hidden rounded-2xl shadow-2xl ${modalBg} border ${borderColor}`}
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* TOP BAR: DEVICES + THEME + CLOSE */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200/60 dark:border-slate-700/60">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="uppercase tracking-wide text-[11px] text-slate-500">
-                  Preview Mode
+            {/* TOP BAR */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-5 sm:py-3 border-b border-slate-200/60 dark:border-slate-700/60">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="uppercase tracking-wide text-[10px] sm:text-[11px] text-slate-500">
+                  Preview
                 </span>
 
-                <div className="ml-3 flex items-center gap-1 rounded-full bg-slate-100/70 dark:bg-slate-800/70 p-1">
+                <div className="flex items-center gap-1 rounded-full bg-slate-100/70 dark:bg-slate-800/70 p-1">
                   <button
                     type="button"
                     onClick={() => setDeviceMode("desktop")}
-                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] ${
+                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] sm:text-[11px] ${
                       deviceMode === "desktop"
                         ? "bg-white dark:bg-slate-900 shadow text-slate-900 dark:text-slate-50"
                         : "text-slate-500"
                     }`}
                   >
                     <Monitor className="h-3.5 w-3.5" />
-                    Desktop
+                    <span className="hidden sm:inline">Desktop</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeviceMode("mobile")}
-                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] ${
+                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] sm:text-[11px] ${
                       deviceMode === "mobile"
                         ? "bg-white dark:bg-slate-900 shadow text-slate-900 dark:text-slate-50"
                         : "text-slate-500"
                     }`}
                   >
                     <Smartphone className="h-3.5 w-3.5" />
-                    iPhone
+                    <span className="hidden sm:inline">Mobile</span>
                   </button>
                 </div>
 
-                <div className="ml-3 flex items-center gap-1 rounded-full bg-slate-100/70 dark:bg-slate-800/70 p-1">
+                <div className="flex items-center gap-1 rounded-full bg-slate-100/70 dark:bg-slate-800/70 p-1">
                   <button
                     type="button"
                     onClick={() => setIsDark(false)}
-                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] ${
+                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] sm:text-[11px] ${
                       !isDark
                         ? "bg-white dark:bg-slate-900 shadow text-slate-900 dark:text-slate-50"
                         : "text-slate-500"
                     }`}
                   >
                     <Sun className="h-3.5 w-3.5" />
-                    Light
+                    <span className="hidden sm:inline">Light</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsDark(true)}
-                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] ${
+                    className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] sm:text-[11px] ${
                       isDark
                         ? "bg-white dark:bg-slate-900 shadow text-slate-900 dark:text-slate-50"
                         : "text-slate-500"
                     }`}
                   >
                     <Moon className="h-3.5 w-3.5" />
-                    Dark
+                    <span className="hidden sm:inline">Dark</span>
                   </button>
                 </div>
               </div>
 
-              {/* Close button */}
               <button
                 onClick={onClose}
-                className="rounded-full bg-slate-100/90 dark:bg-slate-800/80 p-2 text-slate-700 dark:text-slate-100 shadow hover:bg-slate-200 dark:hover:bg-slate-700"
+                className="rounded-full bg-slate-100/90 dark:bg-slate-800/80 p-1.5 sm:p-2 text-slate-700 dark:text-slate-100 shadow hover:bg-slate-200 dark:hover:bg-slate-700"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
 
-            {/* CONTENT AREA */}
-            <div className="p-4 md:p-5">
+            <div className="p-3 sm:p-5 overflow-y-auto max-h-[calc(95vh-60px)]">
               <div
                 className={`mx-auto ${
                   deviceMode === "mobile"
-                    ? "relative rounded-[2.5rem] border border-slate-300/80 bg-slate-900/95 p-4 pb-7 shadow-inner shadow-black/60 max-w-xs"
+                    ? "relative rounded-[2rem] sm:rounded-[2.5rem] border border-slate-300/80 bg-slate-900/95 p-3 pb-6 shadow-inner shadow-black/60 max-w-xs sm:max-w-sm"
                     : ""
                 }`}
               >
-                {/* iPhone notch / frame for mobile mode */}
                 {deviceMode === "mobile" && (
                   <>
-                    <div className="absolute inset-x-16 top-3 h-5 rounded-full bg-black/80" />
-                    <div className="mt-7" />
+                    <div className="absolute inset-x-16 top-2 h-4 sm:h-5 rounded-full bg-black/80" />
+                    <div className="mt-5 sm:mt-7" />
                   </>
                 )}
 
-                {/* GRID: GALLERY + DETAILS */}
-                <div className="grid gap-6 lg:grid-cols-2">
-                  {/* ------------- LEFT: MEDIA VIEWER ------------- */}
+                <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+                  {/* LEFT: MEDIA */}
                   <div
                     className="relative"
                     onTouchStart={handleTouchStart}
                     onTouchEnd={handleTouchEnd}
                   >
                     <div
-                      className={`relative overflow-hidden rounded-2xl border ${borderColor} shadow-sm bg-slate-100 dark:bg-slate-900`}
+                      className={`relative overflow-hidden rounded-xl sm:rounded-2xl border ${borderColor} shadow-sm bg-slate-100 dark:bg-slate-900`}
                       onMouseMove={handleMouseMove}
                       onMouseEnter={handleMouseEnter}
                       onMouseLeave={handleMouseLeave}
                     >
-                      {/* MAIN MEDIA */}
                       {activeAsset ? (
                         <>
                           {is3D(activeAsset) && (
@@ -388,7 +340,7 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                                 background: isDark ? "#020617" : "#f1f5f9",
                                 borderRadius: "16px",
                               }}
-                            ></model-viewer>
+                            />
                           )}
 
                           {!is3D(activeAsset) && isImage(activeAsset) && (
@@ -403,14 +355,10 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                                 } object-cover`}
                               />
 
-                              {/* Zoom lens overlay (desktop only, when zooming) */}
-                              {isZooming && deviceMode === "desktop" && (
-                                <div
-                                  className="pointer-events-none absolute inset-0 hidden lg:block"
-                                  style={{}}
-                                >
+                              {isZooming && deviceMode === "desktop" && !isTouchDevice() && (
+                                <div className="pointer-events-none absolute inset-0 hidden lg:block">
                                   <div
-                                    className="absolute right-2 top-2 h-40 w-40 overflow-hidden rounded-xl border border-slate-300 bg-slate-100 shadow-lg"
+                                    className="absolute right-2 top-2 h-32 w-32 sm:h-40 sm:w-40 overflow-hidden rounded-xl border border-slate-300 bg-slate-100 shadow-lg"
                                     style={{
                                       backgroundImage: `url(${activeAsset.url})`,
                                       backgroundSize: "220%",
@@ -426,7 +374,7 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                             <video
                               src={activeAsset.url}
                               controls
-                              className={`w-full rounded-2xl ${
+                              className={`w-full rounded-xl sm:rounded-2xl ${
                                 deviceMode === "mobile"
                                   ? "aspect-[9/16]"
                                   : "aspect-[16/9]"
@@ -434,22 +382,21 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                             />
                           )}
 
-                          {/* Navigation arrows */}
                           {sortedAssets.length > 1 && (
                             <>
                               <button
                                 type="button"
                                 onClick={goPrev}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black"
+                                className="absolute left-1 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1.5 sm:p-2 text-white hover:bg-black"
                               >
-                                <ChevronLeft className="h-5 w-5" />
+                                <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                               </button>
                               <button
                                 type="button"
                                 onClick={goNext}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1.5 sm:p-2 text-white hover:bg-black"
                               >
-                                <ChevronRight className="h-5 w-5" />
+                                <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
                               </button>
                             </>
                           )}
@@ -467,9 +414,9 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                       )}
                     </div>
 
-                    {/* THUMBNAILS */}
+                    {/* Thumbnails */}
                     {sortedAssets.length > 1 && (
-                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1 snap-x">
                         {sortedAssets.map((a, i) => (
                           <button
                             key={a.id}
@@ -478,7 +425,7 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                               setActiveIndex(i);
                               setIsZooming(false);
                             }}
-                            className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border text-[10px] ${
+                            className={`relative h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-lg sm:rounded-xl border text-[10px] snap-start ${
                               i === activeIndex
                                 ? "border-rose-500 ring-2 ring-rose-300"
                                 : "border-slate-300"
@@ -490,21 +437,18 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                                 className="h-full w-full object-cover"
                               />
                             )}
-
                             {isVideo(a) && (
-                              <div className="flex h-full w-full items-center justify-center bg-black text-white">
+                              <div className="flex h-full w-full items-center justify-center bg-black text-white text-[10px]">
                                 VIDEO
                               </div>
                             )}
-
                             {is3D(a) && (
-                              <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-700 font-semibold">
+                              <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-700 font-semibold text-[10px]">
                                 3D
                               </div>
                             )}
-
                             {a.is_primary && (
-                              <span className="absolute left-1 top-1 rounded-full bg-emerald-600 px-1.5 py-[1px] text-[9px] font-semibold text-white">
+                              <span className="absolute left-0.5 top-0.5 rounded-full bg-emerald-600 px-1 py-[1px] text-[8px] sm:text-[9px] font-semibold text-white">
                                 Primary
                               </span>
                             )}
@@ -514,14 +458,14 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                     )}
                   </div>
 
-                  {/* ------------- RIGHT: DETAILS ------------- */}
-                  <div className="space-y-4">
+                  {/* RIGHT: DETAILS */}
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
-                      <h1 className="text-2xl md:text-3xl font-serif font-semibold">
+                      <h1 className="text-xl sm:text-2xl md:text-3xl font-serif font-semibold">
                         {product.title}
                       </h1>
                       {product.short_description && (
-                        <p className="mt-2 text-sm md:text-base text-slate-500 dark:text-slate-300">
+                        <p className="mt-1 text-xs sm:text-sm md:text-base text-slate-500 dark:text-slate-300">
                           {product.short_description}
                         </p>
                       )}
@@ -533,25 +477,23 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                       currency={product.currency}
                     />
 
-                    {/* Action buttons (dummy UI) */}
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <button className="px-5 py-2.5 text-xs md:text-sm rounded-xl bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900">
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button className="px-3 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm rounded-xl bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900">
                         Add to Cart
                       </button>
-                      <button className="px-4 py-2.5 text-xs md:text-sm rounded-xl border border-slate-300 flex items-center gap-1.5 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
-                        <Heart className="h-4 w-4" />
-                        Wishlist
+                      <button className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm rounded-xl border border-slate-300 flex items-center gap-1 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
+                        <Heart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="hidden xs:inline">Wishlist</span>
                       </button>
-                      <button className="px-4 py-2.5 text-xs md:text-sm rounded-xl flex items-center gap-1.5 text-slate-600 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
-                        <Bell className="h-4 w-4" />
-                        Notify Me
+                      <button className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm rounded-xl flex items-center gap-1 text-slate-600 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                        <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="hidden xs:inline">Notify Me</span>
                       </button>
                     </div>
 
-                    {/* Meta details */}
-                    <div className="grid gap-3 text-xs md:text-sm text-slate-600 dark:text-slate-300 mt-2">
+                    <div className="grid gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2">
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Product Details
                         </div>
                         <ul className="mt-1 space-y-1">
@@ -572,13 +514,13 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                       </div>
 
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Shipping & Care
                         </div>
                         <ul className="mt-1 space-y-1">
                           <li className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-slate-400" />
-                            Insured worldwide shipping
+                            <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+                            <span>Insured worldwide shipping</span>
                           </li>
                           <li>Secure payments & certification</li>
                           <li>Dedicated concierge support</li>
@@ -586,10 +528,9 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                       </div>
                     </div>
 
-                    {/* Description */}
                     {product.description && (
-                      <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 shadow-sm p-3 md:p-4 text-xs md:text-sm text-slate-700 dark:text-slate-200">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 shadow-sm p-2 sm:p-4 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
+                        <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Description
                         </div>
                         <p className="mt-1 whitespace-pre-line">
@@ -598,7 +539,7 @@ const ProductPreview: React.FC<ProductPreviewProps> = ({
                       </div>
                     )}
 
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                       Note: Images and 3D models are for representation only.
                     </p>
                   </div>

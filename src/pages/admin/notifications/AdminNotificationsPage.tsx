@@ -18,7 +18,7 @@ import {
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { apiFetch } from "@/lib/apiClient";
 
-// Types (aligned with backend)
+// Types
 interface Notification {
   id: string;
   title: string;
@@ -43,7 +43,7 @@ interface NotificationsListResponse {
   };
 }
 
-// API functions (admin)
+// API functions
 const BASE_URL = "/crm/notifications";
 
 async function listNotifications(params?: {
@@ -91,7 +91,6 @@ async function fetchDeadLetterQueue(limit = 100): Promise<any[]> {
   return res.dlq || [];
 }
 
-// Helper for target display
 function formatTarget(target: any): string {
   if (!target) return "All users";
   if (target.type === "all") return "All users";
@@ -127,7 +126,6 @@ export default function AdminNotificationsPage() {
   const [formUserIds, setFormUserIds] = useState("");
   const [formScheduledAt, setFormScheduledAt] = useState("");
 
-  // Load notifications
   const loadNotifications = useCallback(async () => {
     setLoading(true);
     try {
@@ -151,7 +149,6 @@ export default function AdminNotificationsPage() {
     loadNotifications();
   }, [loadNotifications]);
 
-  // Delete handler
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this notification? This action cannot be undone.")) return;
     try {
@@ -163,7 +160,6 @@ export default function AdminNotificationsPage() {
     }
   };
 
-  // View details
   const handleViewDetails = async (id: string) => {
     try {
       const notif = await fetchNotificationDetails(id);
@@ -174,7 +170,6 @@ export default function AdminNotificationsPage() {
     }
   };
 
-  // Create submit
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
@@ -205,7 +200,6 @@ export default function AdminNotificationsPage() {
         scheduled_at: formScheduledAt || null,
       });
       toast.success("Notification created successfully");
-      // Reset form
       setFormTitle("");
       setFormBody("");
       setFormTargetType("all");
@@ -220,7 +214,6 @@ export default function AdminNotificationsPage() {
     }
   };
 
-  // Load Dead Letter Queue
   const loadDLQ = async () => {
     try {
       const items = await fetchDeadLetterQueue();
@@ -231,7 +224,6 @@ export default function AdminNotificationsPage() {
     }
   };
 
-  // Pagination controls
   const goPrev = () => setPage((p) => Math.max(1, p - 1));
   const goNext = () => setPage((p) => Math.min(totalPages, p + 1));
 
@@ -242,27 +234,27 @@ export default function AdminNotificationsPage() {
         subtitle="Manage system notifications – create, view, and track broadcasts."
         breadcrumbs={[{ label: "Dashboard", path: "/admin" }, { label: "Notifications" }]}
         actions={
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <button
               onClick={loadDLQ}
-              className="flex items-center gap-2 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+              className="flex items-center gap-2 rounded-full border border-red-300 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50"
             >
-              <AlertCircle size={16} /> Dead Letter Queue
+              <AlertCircle size={14} className="sm:w-4 sm:h-4" /> Dead Letter Queue
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
+              className="flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow hover:bg-indigo-700"
             >
-              <Plus size={16} /> New Notification
+              <Plus size={14} className="sm:w-4 sm:h-4" /> New Notification
             </button>
           </div>
         }
       />
 
-      <div className="px-6 pt-4 pb-8 space-y-6">
+      <div className="px-4 sm:px-6 pt-4 pb-8 space-y-6">
         {/* Filters */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-1 gap-3">
+          <div className="flex flex-1 flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input
@@ -270,7 +262,7 @@ export default function AdminNotificationsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by title or body..."
-                className="w-full rounded-full border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm"
+                className="w-full rounded-full border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm shadow-sm"
               />
             </div>
             <select
@@ -281,7 +273,7 @@ export default function AdminNotificationsPage() {
                 else if (val === "pending") setSentFilter(false);
                 else setSentFilter(undefined);
               }}
-              className="rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm"
+              className="w-full sm:w-auto rounded-full border border-slate-300 bg-white px-4 py-2 text-sm"
             >
               <option value="">All status</option>
               <option value="sent">Sent</option>
@@ -290,7 +282,7 @@ export default function AdminNotificationsPage() {
             <button
               onClick={() => loadNotifications()}
               disabled={loading}
-              className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-slate-50"
+              className="flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
             >
               {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
               Refresh
@@ -298,18 +290,18 @@ export default function AdminNotificationsPage() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Table - horizontally scrollable on mobile */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table className="min-w-[600px] md:min-w-full w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Body</th>
-                  <th className="px-4 py-3">Target</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-3 py-3 sm:px-4">Title</th>
+                  <th className="px-3 py-3 sm:px-4">Body</th>
+                  <th className="px-3 py-3 sm:px-4">Target</th>
+                  <th className="px-3 py-3 sm:px-4">Status</th>
+                  <th className="px-3 py-3 sm:px-4">Created</th>
+                  <th className="px-3 py-3 sm:px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -328,12 +320,12 @@ export default function AdminNotificationsPage() {
                 ) : (
                   notifications.map((n) => (
                     <tr key={n.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium">{n.title}</td>
-                      <td className="px-4 py-3 text-slate-600 max-w-xs truncate">{n.body || "—"}</td>
-                      <td className="px-4 py-3 text-xs">{formatTarget(n.target_query)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 sm:px-4 font-medium text-sm">{n.title}</td>
+                      <td className="px-3 py-3 sm:px-4 text-slate-600 max-w-xs truncate">{n.body || "—"}</td>
+                      <td className="px-3 py-3 sm:px-4 text-xs">{formatTarget(n.target_query)}</td>
+                      <td className="px-3 py-3 sm:px-4">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                             n.sent
                               ? "bg-green-100 text-green-700"
                               : "bg-amber-100 text-amber-700"
@@ -342,22 +334,24 @@ export default function AdminNotificationsPage() {
                           {n.sent ? "Sent" : "Pending"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs">
+                      <td className="px-3 py-3 sm:px-4 text-xs whitespace-nowrap">
                         {new Date(n.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        <button
-                          onClick={() => handleViewDetails(n.id)}
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-100"
-                        >
-                          <Eye size={14} /> View
-                        </button>
-                        <button
-                          onClick={() => handleDelete(n.id)}
-                          className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-100"
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
+                      <td className="px-3 py-3 sm:px-4 text-right">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            onClick={() => handleViewDetails(n.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                          >
+                            <Eye size={12} /> View
+                          </button>
+                          <button
+                            onClick={() => handleDelete(n.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-600 hover:bg-rose-100"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -368,8 +362,8 @@ export default function AdminNotificationsPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
-              <div>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm">
+              <div className="text-xs sm:text-sm">
                 Page {page} of {totalPages} · {total} notifications
               </div>
               <div className="space-x-2">
@@ -395,10 +389,10 @@ export default function AdminNotificationsPage() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Create Notification</h2>
+              <h2 className="text-lg sm:text-xl font-semibold">Create Notification</h2>
               <button onClick={() => setShowCreateModal(false)} className="rounded-full p-1 hover:bg-slate-100">
                 <X size={20} />
               </button>
@@ -410,7 +404,7 @@ export default function AdminNotificationsPage() {
                   type="text"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   required
                 />
               </div>
@@ -420,13 +414,13 @@ export default function AdminNotificationsPage() {
                   rows={3}
                   value={formBody}
                   onChange={(e) => setFormBody(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Target audience</label>
                 <div className="flex gap-4 mb-2">
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-sm">
                     <input
                       type="radio"
                       value="all"
@@ -435,7 +429,7 @@ export default function AdminNotificationsPage() {
                     />
                     All users
                   </label>
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-sm">
                     <input
                       type="radio"
                       value="users"
@@ -452,7 +446,7 @@ export default function AdminNotificationsPage() {
                       rows={3}
                       value={formUserIds}
                       onChange={(e) => setFormUserIds(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     />
                     <p className="text-xs text-slate-500 mt-1">
                       Enter UUIDs separated by commas, spaces, or new lines.
@@ -466,21 +460,21 @@ export default function AdminNotificationsPage() {
                   type="datetime-local"
                   value={formScheduledAt}
                   onChange={(e) => setFormScheduledAt(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="rounded-full border border-slate-300 px-5 py-2 text-sm"
+                  className="rounded-full border border-slate-300 px-4 py-2 text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                  className="flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
                   Send
@@ -493,17 +487,18 @@ export default function AdminNotificationsPage() {
 
       {/* Detail Modal */}
       {showDetailModal && selectedNotification && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Notification Details</h2>
+              <h2 className="text-lg sm:text-xl font-semibold">Notification Details</h2>
               <button onClick={() => setShowDetailModal(false)} className="rounded-full p-1 hover:bg-slate-100">
                 <X size={20} />
               </button>
             </div>
             <div className="space-y-3 text-sm">
               <div>
-                <span className="font-medium">ID:</span> {selectedNotification.id}
+                <span className="font-medium">ID:</span>{" "}
+                <span className="break-all font-mono text-xs">{selectedNotification.id}</span>
               </div>
               <div>
                 <span className="font-medium">Title:</span> {selectedNotification.title}
@@ -531,7 +526,7 @@ export default function AdminNotificationsPage() {
               {selectedNotification.data && (
                 <div>
                   <span className="font-medium">Data:</span>
-                  <pre className="mt-1 rounded bg-slate-100 p-2 text-xs overflow-auto">
+                  <pre className="mt-1 rounded bg-slate-100 p-2 text-xs overflow-auto max-h-48">
                     {JSON.stringify(selectedNotification.data, null, 2)}
                   </pre>
                 </div>
@@ -543,10 +538,10 @@ export default function AdminNotificationsPage() {
 
       {/* Dead Letter Queue Modal */}
       {showDLQ && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-xl max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-4xl rounded-2xl bg-white p-4 sm:p-6 shadow-xl max-h-[85vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Dead Letter Queue</h2>
+              <h2 className="text-lg sm:text-xl font-semibold">Dead Letter Queue</h2>
               <button onClick={() => setShowDLQ(false)} className="rounded-full p-1 hover:bg-slate-100">
                 <X size={20} />
               </button>
@@ -554,28 +549,30 @@ export default function AdminNotificationsPage() {
             {dlqItems.length === 0 ? (
               <p className="text-slate-500">No failed notifications.</p>
             ) : (
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase">
-                  <tr>
-                    <th className="px-3 py-2">ID</th>
-                    <th className="px-3 py-2">Title</th>
-                    <th className="px-3 py-2">Error</th>
-                    <th className="px-3 py-2">Failed At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dlqItems.map((item) => (
-                    <tr key={item.id} className="border-t">
-                      <td className="px-3 py-2 font-mono text-xs">{item.id}</td>
-                      <td className="px-3 py-2">{item.title}</td>
-                      <td className="px-3 py-2 text-red-600 max-w-md truncate">{item.error}</td>
-                      <td className="px-3 py-2 text-xs">
-                        {new Date(item.failed_at).toLocaleString()}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="min-w-[500px] w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase">
+                    <tr>
+                      <th className="px-3 py-2">ID</th>
+                      <th className="px-3 py-2">Title</th>
+                      <th className="px-3 py-2">Error</th>
+                      <th className="px-3 py-2">Failed At</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {dlqItems.map((item) => (
+                      <tr key={item.id} className="border-t">
+                        <td className="px-3 py-2 font-mono text-xs break-all">{item.id}</td>
+                        <td className="px-3 py-2">{item.title}</td>
+                        <td className="px-3 py-2 text-red-600 max-w-xs truncate">{item.error}</td>
+                        <td className="px-3 py-2 text-xs whitespace-nowrap">
+                          {new Date(item.failed_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

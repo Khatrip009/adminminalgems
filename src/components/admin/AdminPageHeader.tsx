@@ -1,3 +1,4 @@
+// src/components/admin/AdminPageHeader.tsx
 import React from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Download } from "lucide-react";
@@ -24,7 +25,7 @@ const AdminPageHeaderComponent: React.FC<AdminPageHeaderProps> = ({
 }) => {
   const content = actions || right;
 
-  const isPdfButton = (child: any) => {
+  const isPdfButton = (child: any): boolean => {
     if (!React.isValidElement(child)) return false;
 
     const className = child.props.className || "";
@@ -37,7 +38,7 @@ const AdminPageHeaderComponent: React.FC<AdminPageHeaderProps> = ({
     return hasDownloadIcon || classIncludesPdf;
   };
 
-  const enhancePdfButton = (child: any) =>
+  const enhancePdfButton = (child: React.ReactElement) =>
     React.cloneElement(child, {
       className:
         "inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold " +
@@ -96,8 +97,8 @@ const AdminPageHeaderComponent: React.FC<AdminPageHeaderProps> = ({
   );
 };
 
-// ⭐️ Named export
+// Named export
 export const AdminPageHeader = AdminPageHeaderComponent;
 
-// ⭐️ Default export (makes imports always work)
+// Default export
 export default AdminPageHeaderComponent;
