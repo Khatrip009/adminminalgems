@@ -78,7 +78,7 @@ export default function LoginPage() {
               <img
                 src="/minal_gems_logo.svg"
                 alt="Minal Gems"
-                className="h-20 w-auto drop-shadow-sm"
+                className="h-10 w-auto drop-shadow-sm"
               />
               <div className="leading-tight">
                 <p className="text-sm font-semibold uppercase tracking-[0.26em] text-pink-500">
