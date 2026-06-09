@@ -25,6 +25,9 @@ import {
   PlusCircle,
   Eye,
   MoreVertical,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -212,6 +215,10 @@ const ProductsPage: React.FC = () => {
   const [publishedFilter, setPublishedFilter] = useState<"" | "true" | "false">("");
   const [loading, setLoading] = useState(false);
 
+  // sorting state
+  const [sortBy, setSortBy] = useState<string>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
   // categories – fetched only once & cached
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -290,30 +297,56 @@ const ProductsPage: React.FC = () => {
 
   // ---------- API calls ----------
   async function loadProducts(targetPage?: number) {
-    setLoading(true);
-    try {
-      const pageToFetch = targetPage ?? 1;
-      const res = await fetchProductsAdmin({
-        q,
-        category_id: categoryFilter || undefined,
-        trade_type: "both",
-        is_published: publishedFilter === "" ? undefined : publishedFilter === "true",
-        page: pageToFetch,
-        limit,
-        sort_by: 'created_at',
-        sort_dir: 'desc',
+  setLoading(true);
+  try {
+    const pageToFetch = targetPage ?? 1;
+    const res = await fetchProductsAdmin({
+      q,
+      category_id: categoryFilter || undefined,
+      trade_type: "both",
+      is_published: publishedFilter === "" ? undefined : publishedFilter === "true",
+      page: pageToFetch,
+      limit,
+      // Note: we still send sort_by/sort_dir in case backend one day supports it
+      sort_by: sortBy,
+      sort_dir: sortDir,
+    });
+
+    let fetchedProducts = res.products || [];
+
+    // ---- Client-side sorting ----
+    if (sortBy && sortDir) {
+      fetchedProducts = [...fetchedProducts].sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+
+        // For category, compare by category name
+        if (sortBy === "category_id") {
+          aVal = findCategoryName(a.category_id);
+          bVal = findCategoryName(b.category_id);
+        }
+
+        // String comparison (case-insensitive)
+        if (typeof aVal === "string") aVal = aVal.toLowerCase();
+        if (typeof bVal === "string") bVal = bVal.toLowerCase();
+
+        if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+        return 0;
       });
-      setProducts(res.products || []);
-      setTotal(res.total || 0);
-      setPage(res.page || pageToFetch);
-      setSelectedProductIds(new Set());
-    } catch (err) {
-      console.error("Failed to load products", err);
-      toast.error("Failed to load products.");
-    } finally {
-      setLoading(false);
     }
+
+    setProducts(fetchedProducts);
+    setTotal(res.total || 0);
+    setPage(res.page || pageToFetch);
+    setSelectedProductIds(new Set());
+  } catch (err) {
+    console.error("Failed to load products", err);
+    toast.error("Failed to load products.");
+  } finally {
+    setLoading(false);
   }
+}
 
   async function loadCategories() {
     if (categoriesFetched.current) return;
@@ -351,7 +384,7 @@ const ProductsPage: React.FC = () => {
     loadCategories();
   }, []);
 
-  // Reload products when filters change
+  // Reload products when filters or sorting change
   useEffect(() => {
     loadProducts(1);
   }, [categoryFilter, publishedFilter]);
@@ -361,6 +394,39 @@ const ProductsPage: React.FC = () => {
       modalContentRef.current.scrollTop = 0;
     }
   }, [modalOpen]);
+
+  // Re-sort products locally when sort criteria change (without refetching)
+useEffect(() => {
+  if (products.length === 0) return;
+  const sorted = [...products].sort((a, b) => {
+    let aVal = a[sortBy];
+    let bVal = b[sortBy];
+    if (sortBy === "category_id") {
+      aVal = findCategoryName(a.category_id);
+      bVal = findCategoryName(b.category_id);
+    }
+    if (typeof aVal === "string") aVal = aVal.toLowerCase();
+    if (typeof bVal === "string") bVal = bVal.toLowerCase();
+    if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+  setProducts(sorted);
+}, [sortBy, sortDir]); // only runs when sort changes, not on every load
+  // Sorting handler
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortDir("asc");
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortBy !== column) return <ArrowUpDown size={14} className="ml-1 opacity-50" />;
+    return sortDir === "asc" ? <ArrowUp size={14} className="ml-1" /> : <ArrowDown size={14} className="ml-1" />;
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1009,9 +1075,30 @@ const ProductsPage: React.FC = () => {
                     />
                   </th>
                   <th className="px-4 py-4">Image</th>
-                  <th className="px-4 py-4">Product</th>
-                  <th className="px-4 py-4">Price</th>
-                  <th className="px-4 py-4">Category</th>
+                  <th
+                    className="px-4 py-4 cursor-pointer select-none hover:text-slate-900 dark:hover:text-white"
+                    onClick={() => handleSort("title")}
+                  >
+                    <div className="flex items-center">
+                      Product {getSortIcon("title")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-4 cursor-pointer select-none hover:text-slate-900 dark:hover:text-white"
+                    onClick={() => handleSort("price")}
+                  >
+                    <div className="flex items-center">
+                      Price {getSortIcon("price")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-4 cursor-pointer select-none hover:text-slate-900 dark:hover:text-white"
+                    onClick={() => handleSort("category_id")}
+                  >
+                    <div className="flex items-center">
+                      Category {getSortIcon("category_id")}
+                    </div>
+                  </th>
                   <th className="px-4 py-4">Stones</th>
                   <th className="px-4 py-4">Status</th>
                   <th className="px-4 py-4 text-right">Actions</th>
@@ -1602,7 +1689,7 @@ const ProductsPage: React.FC = () => {
           document.body
         )}
 
-      {/* Diamond Modal (add/edit) - now with custom fields for Color, Clarity, Shape */}
+      {/* Diamond Modal (add/edit) */}
       {diamondModalOpen &&
         createPortal(
           <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm">
