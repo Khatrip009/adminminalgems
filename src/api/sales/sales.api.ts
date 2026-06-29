@@ -46,8 +46,8 @@ export interface SalesItemPayload {
   item: string;
   diamonds?: DiamondInput[];
   gold?: number;
-  gold_carat?: number;           // Added for gold karat
-  gold_rate?: number;            // Added for gold rate
+  gold_carat?: number;
+  gold_rate?: number;
   gold_price?: number;
   labour_charge?: number;
   profit_percent?: number;
@@ -82,6 +82,17 @@ export interface GroupedCraftsmanResult {
 }
 
 /* =========================================================
+   FILTER PARAMS TYPE (for exports)
+========================================================= */
+export interface SalesExportFilterParams {
+  search?: string;
+  from?: string;
+  to?: string;
+  customer_id?: string;
+  craftsman_id?: string;
+}
+
+/* =========================================================
    CREATE
 ========================================================= */
 
@@ -105,8 +116,8 @@ export const listSalesItems = (params?: {
   search?: string;
   page?: number;
   limit?: number;
-  from?: string;          // Date filter start
-  to?: string;            // Date filter end
+  from?: string;
+  to?: string;
   customer_id?: string;
   craftsman_id?: string;
   sortBy?: string;
@@ -195,31 +206,31 @@ export const exportSelectedSalesPDF = (ids: string[]) => {
 };
 
 /* =========================================================
-   EXPORT – CSV (ALL)
+   EXPORT – CSV (NOW ACCEPTS FILTERS)
 ========================================================= */
 
-export const exportSalesItemsCSV = () =>
-  apiFetch(`${BASE}/export/csv`, {
+export const exportSalesItemsCSV = (params?: SalesExportFilterParams) =>
+  apiFetch(`${BASE}/export/csv${buildQuery(params)}`, {
     method: "GET",
     responseType: "blob",
   });
 
 /* =========================================================
-   EXPORT – EXCEL (ALL)
+   EXPORT – EXCEL (NOW ACCEPTS FILTERS)
 ========================================================= */
 
-export const exportSalesItemsExcel = () =>
-  apiFetch(`${BASE}/export/excel`, {
+export const exportSalesItemsExcel = (params?: SalesExportFilterParams) =>
+  apiFetch(`${BASE}/export/excel${buildQuery(params)}`, {
     method: "GET",
     responseType: "blob",
   });
 
 /* =========================================================
-   EXPORT – REGISTER PDF (A3 LEDGER STYLE WITH PAGE SUBTOTAL)
+   EXPORT – REGISTER PDF (NOW ACCEPTS FILTERS)
 ========================================================= */
 
-export const exportSalesRegisterPDF = () =>
-  apiFetch(`${BASE}/export/register-pdf`, {
+export const exportSalesRegisterPDF = (params?: SalesExportFilterParams) =>
+  apiFetch(`${BASE}/export/register-pdf${buildQuery(params)}`, {
     method: "GET",
     responseType: "blob",
   });
@@ -255,4 +266,20 @@ export const importSalesItemsCSV = (file: File) => {
     body: formData,
     headers: {}, // browser sets multipart boundary
   });
+};
+
+/* =========================================================
+   EXPORT – SIMPLE INVOICE PDF (no cost details)
+========================================================= */
+
+export const exportSalesSimpleInvoicePDF = (saleId: string) => {
+  if (!saleId) throw new Error("sales_item_id_required");
+
+  return apiFetch(
+    `${BASE}/${encodeURIComponent(saleId)}/export/simple-invoice-pdf`,
+    {
+      method: "GET",
+      responseType: "blob",
+    }
+  );
 };

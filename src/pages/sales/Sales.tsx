@@ -1,5 +1,5 @@
 // src/pages/sales/Sales.tsx
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import {
@@ -38,6 +38,7 @@ import {
   createSalesItem,
   updateSalesItem,
   getSalesItem,
+   exportSalesSimpleInvoicePDF,
   exportSelectedSalesExcel,
   exportSelectedSalesPDF,
   groupSalesByCustomer,
@@ -70,7 +71,7 @@ interface Sale {
   item: string;
   product_id?: string | null;
   product_image_url?: string | null;
-  product_primary_image?: string | null;   // <-- added for fallback
+  product_primary_image?: string | null;
   diamonds: Diamond[];
   diamond_pcs: number;
   diamond_carat: number;
@@ -102,7 +103,7 @@ interface SaleFormValues {
   gold: number;
   gold_carat: number;
   gold_rate: number;
-  gold_price: number; // kept in form for preview, NOT sent to server
+  gold_price: number;
   labour_charge: number;
   profit_percent: number;
   customer_id?: string | null;
@@ -228,6 +229,15 @@ const Sales: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ---------- current filters for exports ----------
+  const currentFilters = useMemo(() => ({
+    search: search || undefined,
+    from: fromDate || undefined,
+    to: toDate || undefined,
+    customer_id: customerFilter || undefined,
+    craftsman_id: craftsmanFilter || undefined,
+  }), [search, fromDate, toDate, customerFilter, craftsmanFilter]);
 
   // ---------- load masters ----------
   useEffect(() => {
@@ -459,7 +469,7 @@ const Sales: React.FC = () => {
               <button
                 onClick={() =>
                   safeDownload(
-                    exportSalesItemsCSV,
+                    () => exportSalesItemsCSV(currentFilters),
                     `sales_${new Date().toISOString().split("T")[0]}.csv`
                   )
                 }
@@ -470,7 +480,7 @@ const Sales: React.FC = () => {
               <button
                 onClick={() =>
                   safeDownload(
-                    exportSalesItemsExcel,
+                    () => exportSalesItemsExcel(currentFilters),
                     `sales_${new Date().toISOString().split("T")[0]}.xlsx`
                   )
                 }
@@ -481,7 +491,7 @@ const Sales: React.FC = () => {
               <button
                 onClick={() =>
                   safeDownload(
-                    exportSalesRegisterPDF,
+                    () => exportSalesRegisterPDF(currentFilters),
                     `sales_register_${new Date().toISOString().split("T")[0]}.pdf`
                   )
                 }
@@ -524,6 +534,11 @@ const Sales: React.FC = () => {
               </button>
             </div>
           </div>
+          {(search || fromDate || toDate || customerFilter || craftsmanFilter) && (
+            <p className="text-xs text-amber-600 mt-2">
+              Exports respect active filters
+            </p>
+          )}
         </div>
 
         {/* Filters */}
@@ -922,6 +937,32 @@ const Sales: React.FC = () => {
                         </td>
                         <td className="p-2 sm:p-3 border-b text-center">
                           <button
+                            onClick={() =>
+                              safeDownload(
+                                () => exportSalesInvoicePDF(sale.id),
+                                `invoice-${sale.number}.pdf`
+                              )
+                            }
+                            className="text-indigo-600 hover:text-indigo-800 transition"
+                            title="Download Invoice"
+                          >
+                            <Receipt size={16} />
+                          </button>
+                          <button
+                            onClick={() =>
+                              safeDownload(
+                                () => exportSalesSimpleInvoicePDF(sale.id),
+                                `cost-breakdown-${sale.number}.pdf`
+                              )
+                            }
+                            className="text-emerald-600 hover:text-emerald-800 transition ml-1"
+                            title="Download Cost Breakdown"
+                          >
+                            <FileText size={16} /> {/* or use a different icon like <DollarSign /> */}
+                          </button>
+                        </td>
+                        <td className="p-2 sm:p-3 border-b text-center">
+                          <button
                             onClick={() => openEditModal(sale.id)}
                             className="text-blue-600 hover:text-blue-800 transition"
                             title="Edit"
@@ -1091,7 +1132,7 @@ const Sales: React.FC = () => {
 };
 
 /* =========================================================
-   SALE MODAL (FORM)
+   SALE MODAL (FORM) – Product text suggestions added
 ========================================================= */
 interface SaleModalProps {
   editingId: string | null;
@@ -1113,6 +1154,11 @@ const SaleModal: React.FC<SaleModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [usdPreview, setUsdPreview] = useState<number | null>(null);
   const [estimatedSellingPrice, setEstimatedSellingPrice] = useState<number>(0);
+
+  // Product text suggestion state
+  const [productSearch, setProductSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionRef = useRef<HTMLDivElement>(null);
 
   const {
     register,
@@ -1193,7 +1239,7 @@ const SaleModal: React.FC<SaleModalProps> = ({
   useEffect(() => {
     (async () => {
       try {
-        const prodRes = await fetchProductsAdmin({ limit: 100 });
+        const prodRes = await fetchProductsAdmin({ limit: 10000 });
         if (prodRes?.ok) setProducts(prodRes.products || []);
       } catch {
         toast.error("Failed to load products");
@@ -1242,6 +1288,11 @@ const SaleModal: React.FC<SaleModalProps> = ({
             remarks: sale.remarks || "",
             conversion_rate: Number(sale.conversion_rate) || 0,
           });
+          // Set product search text if product_id exists
+          if (sale.product_id && products.length > 0) {
+            const prod = products.find(p => p.id === sale.product_id);
+            if (prod) setProductSearch(prod.title);
+          }
           if (sale.product_image_url) setImagePreview(sale.product_image_url);
         } else {
           toast.error("Failed to load sale details");
@@ -1253,7 +1304,7 @@ const SaleModal: React.FC<SaleModalProps> = ({
         onClose();
       })
       .finally(() => setLoading(false));
-  }, [editingId, reset, onClose]);
+  }, [editingId, reset, onClose, products]);
 
   // Auto-fill from product selection
   useEffect(() => {
@@ -1325,6 +1376,31 @@ const SaleModal: React.FC<SaleModalProps> = ({
     }
   };
 
+  // Filtered products based on search
+  const filteredProducts = useMemo(() => {
+    if (!productSearch.trim()) return products;
+    const q = productSearch.toLowerCase();
+    return products.filter(p => p.title.toLowerCase().includes(q));
+  }, [products, productSearch]);
+
+  // Handle suggestion click
+  const handleSelectProduct = (prod: Product) => {
+    setProductSearch(prod.title);
+    setValue("product_id", prod.id);
+    setShowSuggestions(false);
+  };
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   const onSubmit = async (data: SaleFormValues) => {
     setLoading(true);
     try {
@@ -1335,7 +1411,6 @@ const SaleModal: React.FC<SaleModalProps> = ({
       formData.append("gold", String(data.gold || 0));
       formData.append("gold_carat", String(data.gold_carat || 0));
       formData.append("gold_rate", String(data.gold_rate || 0));
-      // gold_price intentionally omitted – server calculates it
       formData.append("labour_charge", String(data.labour_charge || 0));
       formData.append("profit_percent", String(data.profit_percent || 0));
 
@@ -1405,19 +1480,35 @@ const SaleModal: React.FC<SaleModalProps> = ({
               />
               {errors.number && <p className="text-red-500 text-xs mt-1">{errors.number.message}</p>}
             </div>
-            <div>
+            <div className="relative" ref={suggestionRef}>
               <label className="block text-sm font-medium mb-1">Product</label>
-              <select
-                {...register("product_id")}
-                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
-              >
-                <option value="">-- Select Product --</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="text"
+                placeholder="Search product..."
+                value={productSearch}
+                onChange={(e) => {
+                  setProductSearch(e.target.value);
+                  setShowSuggestions(true);
+                  if (!e.target.value.trim()) {
+                    setValue("product_id", null);
+                  }
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 text-sm"
+              />
+              {showSuggestions && filteredProducts.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredProducts.map((prod) => (
+                    <div
+                      key={prod.id}
+                      onClick={() => handleSelectProduct(prod)}
+                      className="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm"
+                    >
+                      {prod.title}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium mb-1">Item Description *</label>
