@@ -38,7 +38,8 @@ import {
   createSalesItem,
   updateSalesItem,
   getSalesItem,
-   exportSalesSimpleInvoicePDF,
+  exportSalesSimpleInvoicePDF,
+  exportCombinedInvoicePDF,
   exportSelectedSalesExcel,
   exportSelectedSalesPDF,
   groupSalesByCustomer,
@@ -51,6 +52,9 @@ import { fetchProductsAdmin, type Product } from "@/api/masters/products.api";
 import { listCustomers } from "@/api/masters/customers.api";
 import { listCraftsmen } from "@/api/masters/craftsmen.api";
 import { getAssetUrl } from "@/utils/assetUrl";
+
+// Bulk Sale Modal
+import BulkSaleModal from "@/components/sales/BulkSaleModal";
 
 /* =========================================================
    TYPES
@@ -227,6 +231,9 @@ const Sales: React.FC = () => {
   // Create/edit modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Bulk sale modal
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -514,6 +521,17 @@ const Sales: React.FC = () => {
                 <FileText size={16} /> Selected PDF
               </button>
               <button
+                onClick={async () => {
+                  if (selectedRows.size === 0) return toast.error("No rows selected");
+                  const ids = Array.from(selectedRows);
+                  safeDownload(() => exportCombinedInvoicePDF(ids), `combined_invoice.pdf`);
+                }}
+                disabled={selectedRows.size === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition text-sm disabled:opacity-50"
+              >
+                <FileText size={16} /> Combined Invoice
+              </button>
+              <button
                 onClick={() => fileRef.current?.click()}
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm"
               >
@@ -531,6 +549,12 @@ const Sales: React.FC = () => {
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
               >
                 <Plus size={16} /> New Sale
+              </button>
+              <button
+                onClick={() => setBulkModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+              >
+                <Plus size={16} /> Bulk Sale
               </button>
             </div>
           </div>
@@ -922,6 +946,7 @@ const Sales: React.FC = () => {
                         </td>
                         <td className="p-2 sm:p-3 border-b whitespace-nowrap">{dateFmt(sale.created_at)}</td>
                         <td className="p-2 sm:p-3 border-b text-center">
+                          {/* Detailed Invoice */}
                           <button
                             onClick={() =>
                               safeDownload(
@@ -930,35 +955,22 @@ const Sales: React.FC = () => {
                               )
                             }
                             className="text-indigo-600 hover:text-indigo-800 transition"
-                            title="Download Invoice"
+                            title="Detailed Invoice"
                           >
                             <Receipt size={16} />
                           </button>
-                        </td>
-                        <td className="p-2 sm:p-3 border-b text-center">
-                          <button
-                            onClick={() =>
-                              safeDownload(
-                                () => exportSalesInvoicePDF(sale.id),
-                                `invoice-${sale.number}.pdf`
-                              )
-                            }
-                            className="text-indigo-600 hover:text-indigo-800 transition"
-                            title="Download Invoice"
-                          >
-                            <Receipt size={16} />
-                          </button>
+                          {/* Simple Invoice */}
                           <button
                             onClick={() =>
                               safeDownload(
                                 () => exportSalesSimpleInvoicePDF(sale.id),
-                                `cost-breakdown-${sale.number}.pdf`
+                                `simple-invoice-${sale.number}.pdf`
                               )
                             }
                             className="text-emerald-600 hover:text-emerald-800 transition ml-1"
-                            title="Download Cost Breakdown"
+                            title="Simple Invoice (no cost breakdown)"
                           >
-                            <FileText size={16} /> {/* or use a different icon like <DollarSign /> */}
+                            <FileText size={16} />
                           </button>
                         </td>
                         <td className="p-2 sm:p-3 border-b text-center">
@@ -1124,6 +1136,15 @@ const Sales: React.FC = () => {
             onSuccess={loadSales}
             customers={customers}
             craftsmen={craftsmen}
+          />
+        )}
+
+        {/* Bulk Sale Modal */}
+        {bulkModalOpen && (
+          <BulkSaleModal
+            onClose={() => setBulkModalOpen(false)}
+            onSuccess={() => { loadSales(); setBulkModalOpen(false); }}
+            customers={customers}
           />
         )}
       </div>

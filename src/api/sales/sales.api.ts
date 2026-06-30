@@ -283,3 +283,12 @@ export const exportSalesSimpleInvoicePDF = (saleId: string) => {
     }
   );
 };
+export const exportCombinedInvoicePDF = (ids: string[]) => {
+  if (!ids || !ids.length) throw new Error("ids_required");
+  return apiFetch(`${BASE}/export/combined-invoice-pdf`, {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+    headers: { "Content-Type": "application/json" },
+    responseType: "blob",
+  });
+};
