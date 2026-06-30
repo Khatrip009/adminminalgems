@@ -4,7 +4,6 @@ import { toast } from "react-hot-toast";
 import { useForm, useFieldArray } from "react-hook-form";
 import { X, Save, Plus, Trash2 } from "lucide-react";
 import { fetchProductsAdmin, type Product } from "@/api/masters/products.api";
-import { getAssetUrl } from "@/utils/assetUrl";
 import { createSalesItem } from "@/api/sales/sales.api";
 
 /* =========================================================
@@ -28,6 +27,10 @@ interface SaleLineItem {
   gold_rate: number;
   labour_charge: number;
   profit_percent: number;
+  // new fields
+  craftsman_name?: string;
+  remarks?: string;
+  conversion_rate?: number;
 }
 
 interface BulkSaleFormValues {
@@ -43,7 +46,7 @@ interface BulkSaleModalProps {
 }
 
 /* =========================================================
-   HELPER – PRODUCT ROW (no auto‑effect, uses callback)
+   PRODUCT ROW (with additional fields)
 ========================================================= */
 
 interface ProductRowProps {
@@ -74,26 +77,22 @@ const ProductRow: React.FC<ProductRowProps> = ({
     name: `lineItems.${index}.diamonds`,
   });
 
-  // Filtered products based on search
   const filteredProducts = useMemo(() => {
     if (!productSearch.trim()) return products.slice(0, 20);
     const q = productSearch.toLowerCase();
     return products.filter((p) => p.title.toLowerCase().includes(q)).slice(0, 20);
   }, [products, productSearch]);
 
-  // Handle product selection – set all fields in one go
   const handleProductSelect = useCallback(
     (prod: Product) => {
       setProductSearch(prod.title);
       setShowSuggestions(false);
-
-      // Set the hidden product_id
       setValue(`lineItems.${index}.product_id`, prod.id);
-      // Basic fields
       setValue(`lineItems.${index}.item`, prod.title);
       setValue(`lineItems.${index}.gold_carat`, prod.gold_carat || 18);
 
-      // Diamonds
+      // fallback rate
+      const productRate = Number(prod.rate) || 0;
       let diamondData: any[] = [];
       if (Array.isArray(prod.diamonds)) {
         diamondData = prod.diamonds;
@@ -103,30 +102,27 @@ const ProductRow: React.FC<ProductRowProps> = ({
         } catch {}
       }
 
-      // Clear existing diamonds first, then add new ones
+      // Clear & fill diamonds
       const currentLength = fields.length;
-      for (let i = 0; i < currentLength; i++) {
-        remove(0);
-      }
+      for (let i = 0; i < currentLength; i++) remove(0);
 
       if (diamondData.length > 0) {
         diamondData.forEach((d: any) => {
           append({
             pcs: d.pcs || 1,
             carat: d.carat || 0,
-            rate: d.rate || 0,
+            rate: Number(d.rate) || productRate,
             type: d.type || "Diamond",
             packet_no: d.packet_no || "",
           });
         });
       } else {
-        append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" });
+        append({ pcs: 1, carat: 0, rate: productRate, type: "Diamond", packet_no: "" });
       }
     },
     [index, setValue, fields.length, remove, append]
   );
 
-  // Close suggestions on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (suggestionRef.current && !suggestionRef.current.contains(e.target as Node)) {
@@ -157,9 +153,7 @@ const ProductRow: React.FC<ProductRowProps> = ({
             onChange={(e) => {
               setProductSearch(e.target.value);
               setShowSuggestions(true);
-              if (!e.target.value.trim()) {
-                setValue(`lineItems.${index}.product_id`, null);
-              }
+              if (!e.target.value.trim()) setValue(`lineItems.${index}.product_id`, null);
             }}
             onFocus={() => setShowSuggestions(true)}
             placeholder="Search product..."
@@ -194,91 +188,64 @@ const ProductRow: React.FC<ProductRowProps> = ({
           <label className="block text-xs font-medium mb-1">Diamonds</label>
           {fields.map((df, di) => (
             <div key={df.id} className="grid grid-cols-5 gap-1 mb-1 items-end">
-              <input
-                type="number"
-                step="1"
-                {...register(`lineItems.${index}.diamonds.${di}.pcs`, { valueAsNumber: true })}
-                className="border rounded p-1 text-xs"
-                placeholder="Pcs"
-              />
-              <input
-                type="number"
-                step="0.01"
-                {...register(`lineItems.${index}.diamonds.${di}.carat`, { valueAsNumber: true })}
-                className="border rounded p-1 text-xs"
-                placeholder="Carat"
-              />
-              <input
-                type="number"
-                step="0.01"
-                {...register(`lineItems.${index}.diamonds.${di}.rate`, { valueAsNumber: true })}
-                className="border rounded p-1 text-xs"
-                placeholder="Rate"
-              />
-              <input
-                {...register(`lineItems.${index}.diamonds.${di}.type`)}
-                className="border rounded p-1 text-xs"
-                placeholder="Type"
-              />
-              <button type="button" onClick={() => remove(di)} className="text-red-500">
-                <Trash2 size={14} />
-              </button>
+              <input type="number" step="1" {...register(`lineItems.${index}.diamonds.${di}.pcs`, { valueAsNumber: true })} className="border rounded p-1 text-xs" placeholder="Pcs" />
+              <input type="number" step="0.01" {...register(`lineItems.${index}.diamonds.${di}.carat`, { valueAsNumber: true })} className="border rounded p-1 text-xs" placeholder="Carat" />
+              <input type="number" step="0.01" {...register(`lineItems.${index}.diamonds.${di}.rate`, { valueAsNumber: true })} className="border rounded p-1 text-xs" placeholder="Rate" />
+              <input {...register(`lineItems.${index}.diamonds.${di}.type`)} className="border rounded p-1 text-xs" placeholder="Type" />
+              <button type="button" onClick={() => remove(di)} className="text-red-500"><Trash2 size={14} /></button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() =>
-              append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" })
-            }
-            className="text-indigo-600 text-xs mt-1"
-          >
-            + Add Diamond
-          </button>
+          <button type="button" onClick={() => append({ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" })} className="text-indigo-600 text-xs mt-1">+ Add Diamond</button>
         </div>
 
+        {/* Gold fields */}
         <div>
           <label className="block text-xs font-medium mb-1">Gold Wt (g)</label>
-          <input
-            type="number"
-            step="0.01"
-            {...register(`lineItems.${index}.gold`, { valueAsNumber: true })}
-            className="w-full border rounded p-1 text-sm"
-          />
+          <input type="number" step="0.01" {...register(`lineItems.${index}.gold`, { valueAsNumber: true })} className="w-full border rounded p-1 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Gold Carat</label>
-          <input
-            type="number"
-            step="0.1"
-            {...register(`lineItems.${index}.gold_carat`, { valueAsNumber: true })}
-            className="w-full border rounded p-1 text-sm"
-          />
+          <input type="number" step="0.1" {...register(`lineItems.${index}.gold_carat`, { valueAsNumber: true })} className="w-full border rounded p-1 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Gold Rate (₹/g)</label>
-          <input
-            type="number"
-            step="0.01"
-            {...register(`lineItems.${index}.gold_rate`, { valueAsNumber: true })}
-            className="w-full border rounded p-1 text-sm"
-          />
+          <input type="number" step="0.01" {...register(`lineItems.${index}.gold_rate`, { valueAsNumber: true })} className="w-full border rounded p-1 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Labour (₹)</label>
-          <input
-            type="number"
-            step="0.01"
-            {...register(`lineItems.${index}.labour_charge`, { valueAsNumber: true })}
-            className="w-full border rounded p-1 text-sm"
-          />
+          <input type="number" step="0.01" {...register(`lineItems.${index}.labour_charge`, { valueAsNumber: true })} className="w-full border rounded p-1 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Profit %</label>
+          <input type="number" step="0.01" {...register(`lineItems.${index}.profit_percent`, { valueAsNumber: true })} className="w-full border rounded p-1 text-sm" />
+        </div>
+
+        {/* --- NEW: Craftsman, Remarks, Conversion Rate --- */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Craftsman Name</label>
+          <input
+            {...register(`lineItems.${index}.craftsman_name`)}
+            className="w-full border rounded p-1 text-sm"
+            placeholder="Optional"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium mb-1">Remarks</label>
+          <textarea
+            rows={2}
+            {...register(`lineItems.${index}.remarks`)}
+            className="w-full border rounded p-1 text-sm"
+            placeholder="Any notes..."
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1">Conv. Rate (₹ → 1 USD)</label>
           <input
             type="number"
-            step="0.01"
-            {...register(`lineItems.${index}.profit_percent`, { valueAsNumber: true })}
+            step="0.0001"
+            {...register(`lineItems.${index}.conversion_rate`, { valueAsNumber: true })}
             className="w-full border rounded p-1 text-sm"
+            placeholder="e.g. 83.50"
           />
         </div>
       </div>
@@ -308,24 +275,24 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
     defaultValues: {
       customer_id: null,
       customer_name: "",
-      lineItems: [
-        {
-          product_id: null,
-          item: "",
-          diamonds: [{ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" }],
-          gold: 0,
-          gold_carat: 0,
-          gold_rate: 0,
-          labour_charge: 0,
-          profit_percent: 0,
-        },
-      ],
+      lineItems: [{
+        product_id: null,
+        item: "",
+        diamonds: [{ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" }],
+        gold: 0,
+        gold_carat: 0,
+        gold_rate: 0,
+        labour_charge: 0,
+        profit_percent: 0,
+        craftsman_name: "",
+        remarks: "",
+        conversion_rate: 0,
+      }],
     },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lineItems" });
 
-  // Load products once
   useEffect(() => {
     (async () => {
       try {
@@ -337,7 +304,6 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
     })();
   }, []);
 
-  // Filtered customers
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return customers.slice(0, 20);
     const q = customerSearch.toLowerCase();
@@ -354,7 +320,6 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
     [setValue]
   );
 
-  // Close customer suggestions on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
@@ -372,6 +337,7 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
       for (let i = 0; i < data.lineItems.length; i++) {
         const item = data.lineItems[i];
         if (!item.item.trim()) continue;
+
         const formData = new FormData();
         formData.append("number", `${prefix}-${i + 1}`);
         formData.append("item", item.item);
@@ -384,6 +350,11 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
         formData.append("customer_id", data.customer_id || "");
         formData.append("customer_name", data.customer_name);
         if (item.product_id) formData.append("product_id", item.product_id);
+        // NEW fields
+        if (item.craftsman_name) formData.append("craftsman_name", item.craftsman_name);
+        if (item.remarks) formData.append("remarks", item.remarks);
+        if (item.conversion_rate) formData.append("conversion_rate", String(item.conversion_rate));
+
         await createSalesItem(formData);
       }
       toast.success(`Created ${data.lineItems.length} sales items`);
@@ -400,12 +371,9 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[95vh] overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
           <h2 className="text-xl font-bold">Bulk Sale (Multiple Products)</h2>
-          <button onClick={onClose}>
-            <X size={20} />
-          </button>
+          <button onClick={onClose}><X size={20} /></button>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-4 space-y-6">
@@ -430,11 +398,7 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
             {showCustomerSuggestions && filteredCustomers.length > 0 && (
               <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto">
                 {filteredCustomers.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={() => handleCustomerSelect(c)}
-                    className="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm"
-                  >
+                  <div key={c.id} onClick={() => handleCustomerSelect(c)} className="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm">
                     {c.name}
                   </div>
                 ))}
@@ -442,7 +406,7 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
             )}
           </div>
 
-          {/* Line Items */}
+          {/* Products */}
           <div>
             <h3 className="font-semibold mb-2">Products</h3>
             {fields.map((field, index) => (
@@ -459,18 +423,19 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
             ))}
             <button
               type="button"
-              onClick={() =>
-                append({
-                  product_id: null,
-                  item: "",
-                  diamonds: [{ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" }],
-                  gold: 0,
-                  gold_carat: 0,
-                  gold_rate: 0,
-                  labour_charge: 0,
-                  profit_percent: 0,
-                })
-              }
+              onClick={() => append({
+                product_id: null,
+                item: "",
+                diamonds: [{ pcs: 1, carat: 0, rate: 0, type: "Diamond", packet_no: "" }],
+                gold: 0,
+                gold_carat: 0,
+                gold_rate: 0,
+                labour_charge: 0,
+                profit_percent: 0,
+                craftsman_name: "",
+                remarks: "",
+                conversion_rate: 0,
+              })}
               className="text-indigo-600 flex items-center gap-1 hover:text-indigo-700 mt-2"
             >
               <Plus size={16} /> Add Product
@@ -479,14 +444,8 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
 
           {/* Footer */}
           <div className="border-t pt-4 flex justify-end gap-2 sticky bottom-0 bg-white pb-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
-            >
+            <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
               {loading ? "Saving..." : <><Save size={16} /> Create Bulk Sales</>}
             </button>
           </div>
