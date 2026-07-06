@@ -27,7 +27,6 @@ interface SaleLineItem {
   gold_rate: number;
   labour_charge: number;
   profit_percent: number;
-  // new fields
   craftsman_name?: string;
   remarks?: string;
   conversion_rate?: number;
@@ -46,7 +45,7 @@ interface BulkSaleModalProps {
 }
 
 /* =========================================================
-   PRODUCT ROW (with additional fields)
+   PRODUCT ROW (unchanged)
 ========================================================= */
 
 interface ProductRowProps {
@@ -91,7 +90,6 @@ const ProductRow: React.FC<ProductRowProps> = ({
       setValue(`lineItems.${index}.item`, prod.title);
       setValue(`lineItems.${index}.gold_carat`, prod.gold_carat || 18);
 
-      // fallback rate
       const productRate = Number(prod.rate) || 0;
       let diamondData: any[] = [];
       if (Array.isArray(prod.diamonds)) {
@@ -102,7 +100,6 @@ const ProductRow: React.FC<ProductRowProps> = ({
         } catch {}
       }
 
-      // Clear & fill diamonds
       const currentLength = fields.length;
       for (let i = 0; i < currentLength; i++) remove(0);
 
@@ -220,7 +217,7 @@ const ProductRow: React.FC<ProductRowProps> = ({
           <input type="number" step="0.01" {...register(`lineItems.${index}.profit_percent`, { valueAsNumber: true })} className="w-full border rounded p-1 text-sm" />
         </div>
 
-        {/* --- NEW: Craftsman, Remarks, Conversion Rate --- */}
+        {/* Craftsman, Remarks, Conversion Rate */}
         <div>
           <label className="block text-xs font-medium mb-1">Craftsman Name</label>
           <input
@@ -254,7 +251,7 @@ const ProductRow: React.FC<ProductRowProps> = ({
 };
 
 /* =========================================================
-   MAIN BULK SALE MODAL
+   MAIN BULK SALE MODAL (with invoice prefix)
 ========================================================= */
 
 const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, customers }) => {
@@ -263,6 +260,10 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const customerRef = useRef<HTMLDivElement>(null);
+
+  // ---------- MANUAL INVOICE PREFIX ----------
+  const [invoicePrefix, setInvoicePrefix] = useState("");
+  // ------------------------------------------
 
   const {
     register,
@@ -333,7 +334,9 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
   const onSubmit = async (data: BulkSaleFormValues) => {
     setLoading(true);
     try {
-      const prefix = `BLK-${Date.now().toString(36).toUpperCase()}`;
+      // Use provided prefix or auto‑generate a short unique code
+      const prefix = invoicePrefix.trim() || `BLK-${Date.now().toString(36).toUpperCase()}`;
+
       for (let i = 0; i < data.lineItems.length; i++) {
         const item = data.lineItems[i];
         if (!item.item.trim()) continue;
@@ -350,7 +353,6 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
         formData.append("customer_id", data.customer_id || "");
         formData.append("customer_name", data.customer_name);
         if (item.product_id) formData.append("product_id", item.product_id);
-        // NEW fields
         if (item.craftsman_name) formData.append("craftsman_name", item.craftsman_name);
         if (item.remarks) formData.append("remarks", item.remarks);
         if (item.conversion_rate) formData.append("conversion_rate", String(item.conversion_rate));
@@ -377,6 +379,21 @@ const BulkSaleModal: React.FC<BulkSaleModalProps> = ({ onClose, onSuccess, custo
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-4 space-y-6">
+          {/* Invoice Number Prefix */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Invoice Number Prefix</label>
+            <input
+              type="text"
+              value={invoicePrefix}
+              onChange={(e) => setInvoicePrefix(e.target.value)}
+              placeholder="e.g., INV-2026 (auto if empty)"
+              className="w-full border rounded-lg p-2 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Each item will be numbered as <strong>PREFIX-1</strong>, <strong>PREFIX-2</strong>, …
+            </p>
+          </div>
+
           {/* Customer selection */}
           <div className="relative" ref={customerRef}>
             <label className="block text-sm font-medium mb-1">Customer</label>
