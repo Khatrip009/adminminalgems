@@ -1,6 +1,6 @@
 // src/pages/AdminOrdersPage.tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   Filter,
@@ -10,31 +10,60 @@ import {
   CreditCard,
   Truck,
   Eye,
+  Plus,
+  UserPlus,
+  X,
+  Download,
+  Settings,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-
 import {
   listOrders,
+  createOrder,
+  downloadOrderRegisterPDF,
   type OrderOverview,
   ORDER_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
   FULFILLMENT_STATUS_OPTIONS,
 } from "@/api/sales/orders.api";
+import { fetchProductsAdmin } from "@/api/masters/products.api";
+import type { Product } from "@/api/masters/products.api";
+import { listCustomers, createCustomer } from "@/api/masters/customers.api";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch, API_ROUTES } from "@/lib/apiClient";
+import type {
+  DiamondSnapshot,
+  CreateOrderItemPayload,
+} from "@/api/sales/orders.api";
 
 const PAGE_LIMIT = 20;
 
-// Helper: resolve primary key from OrderOverview
 function getOrderId(o: OrderOverview): string | undefined {
-  // Support both "id" and "order_id" coming from the backend view
   return (o as any).id || (o as any).order_id || undefined;
 }
+
+const BLANK_DIAMOND: DiamondSnapshot = {
+  id: "",
+  product_id: "",
+  diamond_type: "NATURAL",
+  shape: "ROUND",
+  color: "G",
+  clarity: "VS1",
+  carat: 0,
+  pcs: 1,
+  rate: 0,
+  total_price: 0,
+  sort_order: 0,
+};
 
 const AdminOrdersPage: React.FC = () => {
   const navigate = useNavigate();
 
+  // --- orders list state ---
   const [orders, setOrders] = useState<OrderOverview[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -45,6 +74,38 @@ const AdminOrdersPage: React.FC = () => {
   const [paymentFilter, setPaymentFilter] = useState<string>("");
   const [fulfillmentFilter, setFulfillmentFilter] = useState<string>("");
 
+  // --- create order modal state ---
+  const [modalOpen, setModalOpen] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [items, setItems] = useState<
+    (CreateOrderItemPayload & { product?: Product })[]
+  >([]);
+  const [creating, setCreating] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+
+  // --- customer selection state ---
+  const [customers, setCustomers] = useState<
+    { id: string; full_name: string; email?: string }[]
+  >([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const customersLoaded = useRef(false);
+
+  // --- new customer dialog state ---
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
+
+  // --- item editor state ---
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [editingItem, setEditingItem] =
+    useState<CreateOrderItemPayload | null>(null);
+  const [diamondsLoading, setDiamondsLoading] = useState(false);
+
+  // --- load orders ---
   async function loadOrders(opts?: { page?: number }) {
     setLoading(true);
     try {
@@ -63,12 +124,11 @@ const AdminOrdersPage: React.FC = () => {
 
   useEffect(() => {
     loadOrders({ page: 1 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // filtering is client-side (useMemo), so nothing else to do
   };
 
   const filteredOrders = useMemo(() => {
@@ -87,12 +147,10 @@ const AdminOrdersPage: React.FC = () => {
           .toLowerCase();
         if (!haystack.includes(search)) return false;
       }
-
       if (statusFilter && o.status !== statusFilter) return false;
       if (paymentFilter && o.payment_status !== paymentFilter) return false;
       if (fulfillmentFilter && o.fulfillment_status !== fulfillmentFilter)
         return false;
-
       return true;
     });
   }, [orders, q, statusFilter, paymentFilter, fulfillmentFilter]);
@@ -128,18 +186,274 @@ const AdminOrdersPage: React.FC = () => {
     return "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200";
   };
 
-const handleViewOrder = (o: OrderOverview) => {
-  const orderId = getOrderId(o);
-  if (!orderId) {
-    console.warn("Missing order id for order row", o);
-    toast.error("Order ID missing in data.");
-    return;
+  const handleViewOrder = (o: OrderOverview) => {
+    const orderId = getOrderId(o);
+    if (!orderId) {
+      toast.error("Order ID missing in data.");
+      return;
+    }
+    navigate(`/admin/orders/${orderId}`);
+  };
+
+  // --- download order register ---
+  const { token } = useAuth();
+
+  const handleDownloadRegister = async () => {
+    try {
+      await downloadOrderRegisterPDF(token);
+      toast.success("Order register downloaded.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to download order register");
+    }
+  };
+
+  // --- load customers ---
+  async function loadCustomers() {
+    if (customersLoaded.current) return;
+    try {
+      const res = await listCustomers({ limit: 500 });
+      setCustomers(res.customers || []);
+      customersLoaded.current = true;
+    } catch (err) {
+      console.error("Failed to load customers", err);
+      toast.error("Failed to load customers.");
+    }
   }
-  navigate(`/admin/orders/${orderId}`);   // ✅ corrected
-};
+
+  // --- new customer creation ---
+  const handleCreateCustomer = async () => {
+    if (!newCustomerName.trim()) {
+      toast.error("Name is required.");
+      return;
+    }
+    setSavingCustomer(true);
+    try {
+      const res = await createCustomer({
+        full_name: newCustomerName.trim(),
+        email: newCustomerEmail.trim() || undefined,
+        phone: newCustomerPhone.trim() || undefined,
+      });
+      const created = res.customer || res;
+      setCustomers((prev) => [
+        ...prev,
+        {
+          id: created.id,
+          full_name: created.full_name,
+          email: created.email,
+        },
+      ]);
+      setSelectedCustomerId(created.id);
+      setNewCustomerOpen(false);
+      setNewCustomerName("");
+      setNewCustomerEmail("");
+      setNewCustomerPhone("");
+      toast.success("Customer created.");
+    } catch (err) {
+      console.error("Failed to create customer", err);
+      toast.error("Failed to create customer.");
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+
+  // --- fetch product diamonds (for editor) ---
+  const fetchProductDiamonds = async (
+    productId: string
+  ): Promise<DiamondSnapshot[]> => {
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        diamonds: DiamondSnapshot[];
+      }>(`${API_ROUTES.masters}/products/${productId}/diamonds`);
+      return res.diamonds || [];
+    } catch {
+      return [];
+    }
+  };
+
+  // --- add item to order ---
+  const addItem = async (product: Product) => {
+    if (items.find((i) => i.product_id === product.id)) return;
+
+    setDiamondsLoading(true);
+    const diamonds = await fetchProductDiamonds(product.id);
+    setDiamondsLoading(false);
+
+    const newItem: CreateOrderItemPayload = {
+      product_id: product.id,
+      quantity: 1,
+      unit_price: Number(product.price),
+      diamond_details: diamonds.length > 0 ? diamonds : [],
+      metal_type: product.metal_type,
+      gold_carat: product.gold_carat ? Number(product.gold_carat) : undefined,
+      metal_rate: product.metal_rate
+        ? Number(product.metal_rate)
+        : undefined,
+      total_metal_price: product.total_metal_price
+        ? Number(product.total_metal_price)
+        : undefined,
+      total_weight: product.total_weight
+        ? Number(product.total_weight)
+        : undefined,
+      gold_weight: product.gold_weight
+        ? Number(product.gold_weight)
+        : undefined,
+      total_diamond_price: product.total_diamond_price
+        ? Number(product.total_diamond_price)
+        : undefined,
+      labour: product.labour ? Number(product.labour) : undefined,
+      profit_percent: product.profit_percent
+        ? Number(product.profit_percent)
+        : undefined,
+      profit_amount: product.profit_amount
+        ? Number(product.profit_amount)
+        : undefined,
+    };
+
+    setItems([...items, { ...newItem, product }]);
+  };
+
+  const removeItem = (productId: string) => {
+    setItems(items.filter((i) => i.product_id !== productId));
+  };
+
+  // --- Open item editor ---
+  const openItemEditor = (index: number) => {
+    setEditingItemIndex(index);
+    setEditingItem({ ...items[index] });
+  };
+
+  const closeItemEditor = () => {
+    setEditingItemIndex(null);
+    setEditingItem(null);
+  };
+
+  const saveItemEditor = () => {
+    if (editingItemIndex !== null && editingItem) {
+      const updated = [...items];
+      updated[editingItemIndex] = {
+        ...editingItem,
+        product: updated[editingItemIndex].product,
+      };
+      setItems(updated);
+      toast.success("Item updated");
+    }
+    closeItemEditor();
+  };
+
+  // --- update a field of the item being edited ---
+  const updateEditingItem = (
+    field: keyof CreateOrderItemPayload,
+    value: any
+  ) => {
+    if (!editingItem) return;
+    setEditingItem({ ...editingItem, [field]: value });
+  };
+
+  // --- diamond editor helpers ---
+  const addDiamondToEditor = () => {
+    if (!editingItem) return;
+    const diamonds = editingItem.diamond_details
+      ? [...editingItem.diamond_details]
+      : [];
+    diamonds.push({ ...BLANK_DIAMOND });
+    setEditingItem({ ...editingItem, diamond_details: diamonds });
+  };
+
+  const updateDiamondInEditor = (
+    index: number,
+    field: keyof DiamondSnapshot,
+    value: any
+  ) => {
+    if (!editingItem || !editingItem.diamond_details) return;
+    const diamonds = [...editingItem.diamond_details];
+    diamonds[index] = { ...diamonds[index], [field]: value };
+    if (field === "carat" || field === "rate") {
+      diamonds[index].total_price =
+        Number(diamonds[index].carat) * Number(diamonds[index].rate);
+    }
+    setEditingItem({ ...editingItem, diamond_details: diamonds });
+  };
+
+  const removeDiamondFromEditor = (index: number) => {
+    if (!editingItem || !editingItem.diamond_details) return;
+    const diamonds = [...editingItem.diamond_details];
+    diamonds.splice(index, 1);
+    setEditingItem({ ...editingItem, diamond_details: diamonds });
+  };
+
+  // --- Create Order (with logging and forced unit_price) ---
+  const handleCreateOrder = async () => {
+    if (items.length === 0) {
+      toast.error("Please add at least one product.");
+      return;
+    }
+
+    // Build payload, ensuring unit_price is always a number (fallback to product price)
+    const payloadItems: CreateOrderItemPayload[] = items.map((item) => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price ?? item.product?.price ?? 0,
+      diamond_details: item.diamond_details,
+      metal_type: item.metal_type,
+      gold_carat: item.gold_carat,
+      metal_rate: item.metal_rate,
+      total_metal_price: item.total_metal_price,
+      total_weight: item.total_weight,
+      gold_weight: item.gold_weight,
+      total_diamond_price: item.total_diamond_price,
+      labour: item.labour,
+      profit_percent: item.profit_percent,
+      profit_amount: item.profit_amount,
+    }));
+
+    console.log("[AdminOrders] Creating order with items:", payloadItems); // ★ for debugging
+
+    setCreating(true);
+    try {
+      await createOrder({
+        currency: "INR",
+        items: payloadItems,
+        customer_id: selectedCustomerId || undefined,
+      });
+      toast.success("Order created successfully.");
+      setModalOpen(false);
+      loadOrders({ page: 1 });
+    } catch (err) {
+      console.error("Create order failed", err);
+      toast.error("Failed to create order.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // --- Open Create Modal ---
+  const openCreateModal = async () => {
+    setModalOpen(true);
+    setItems([]);
+    setProductSearch("");
+    setSelectedCustomerId("");
+    setCustomerSearch("");
+    await loadCustomers();
+    if (products.length === 0) {
+      setProductsLoading(true);
+      try {
+        const res = await fetchProductsAdmin({
+          limit: 100,
+          is_published: true,
+        });
+        setProducts(res.products || []);
+      } catch (err) {
+        toast.error("Failed to load products.");
+      } finally {
+        setProductsLoading(false);
+      }
+    }
+  };
 
   return (
     <div className="relative">
+      {/* ---------- Header ---------- */}
       <AdminPageHeader
         title="Orders"
         subtitle="Monitor orders, payments and fulfillment for Minal Gems."
@@ -150,7 +464,28 @@ const handleViewOrder = (o: OrderOverview) => {
       />
 
       <div className="px-6 pt-4 pb-8 space-y-8">
-        {/* FILTER BAR */}
+        {/* ---------- Top actions ---------- */}
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-slate-600 dark:text-slate-400">
+            {total} orders total
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadRegister}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <Download size={16} /> Order Register
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:brightness-110"
+            >
+              <Plus size={16} /> New Order
+            </button>
+          </div>
+        </div>
+
+        {/* ---------- FILTER BAR ---------- */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <form
             onSubmit={handleSearchSubmit}
@@ -169,7 +504,6 @@ const handleViewOrder = (o: OrderOverview) => {
                 className="w-full rounded-full border border-slate-300 bg-white py-3 pl-10 pr-3 text-base text-slate-900 shadow-sm focus:border-sky-500 focus:ring-sky-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
               />
             </div>
-
             <button
               type="submit"
               className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
@@ -179,7 +513,6 @@ const handleViewOrder = (o: OrderOverview) => {
           </form>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Status filter */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -192,22 +525,18 @@ const handleViewOrder = (o: OrderOverview) => {
                 </option>
               ))}
             </select>
-
-            {/* Payment filter */}
             <select
               value={paymentFilter}
               onChange={(e) => setPaymentFilter(e.target.value)}
               className="rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-sky-500 focus:ring-sky-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
-              <option value="">All payment status</option>
+              <option value="">All payment</option>
               {PAYMENT_STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
               ))}
             </select>
-
-            {/* Fulfillment filter */}
             <select
               value={fulfillmentFilter}
               onChange={(e) => setFulfillmentFilter(e.target.value)}
@@ -220,7 +549,6 @@ const handleViewOrder = (o: OrderOverview) => {
                 </option>
               ))}
             </select>
-
             <button
               onClick={() => loadOrders({ page })}
               disabled={loading}
@@ -236,7 +564,7 @@ const handleViewOrder = (o: OrderOverview) => {
           </div>
         </div>
 
-        {/* TABLE */}
+        {/* ---------- TABLE ---------- */}
         <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-base text-slate-800 dark:text-slate-200">
@@ -270,10 +598,11 @@ const handleViewOrder = (o: OrderOverview) => {
                     const displayOrderId =
                       o.order_number ||
                       (orderId ? orderId.slice(0, 8) : "Unknown");
-
                     return (
                       <tr
-                        key={orderId || o.order_number || `order-row-${index}`}
+                        key={
+                          orderId || o.order_number || `order-row-${index}`
+                        }
                         className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
                       >
                         <td className="px-6 py-4">
@@ -374,7 +703,6 @@ const handleViewOrder = (o: OrderOverview) => {
             </table>
           </div>
 
-          {/* Pagination */}
           <div className="flex items-center justify-between px-6 py-3 text-sm text-slate-600 dark:text-slate-400">
             <div>
               Page {page} of {pageCount} · {total} orders
@@ -413,6 +741,684 @@ const handleViewOrder = (o: OrderOverview) => {
           </div>
         </div>
       </div>
+
+      {/* ===== CREATE ORDER MODAL ===== */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Create New Order</h2>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {productsLoading ? (
+              <div className="py-4 text-center">
+                <Loader2 className="mx-auto animate-spin" /> Loading products...
+              </div>
+            ) : (
+              <>
+                {/* Customer Selection */}
+                <div className="mb-4">
+                  <label className="mb-1 block text-sm font-medium">
+                    Customer
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedCustomerId}
+                      onChange={(e) => setSelectedCustomerId(e.target.value)}
+                      className="flex-1 rounded-lg border p-2 text-sm"
+                    >
+                      <option value="">Walk‑in / No customer</option>
+                      {customers
+                        .filter((c) => {
+                          const s = customerSearch.trim().toLowerCase();
+                          if (!s) return true;
+                          return (
+                            (c.full_name ?? "").toLowerCase().includes(s) ||
+                            (c.email
+                              ? c.email.toLowerCase().includes(s)
+                              : false)
+                          );
+                        })
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.full_name} {c.email ? `(${c.email})` : ""}
+                          </option>
+                        ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Search…"
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      className="w-40 rounded-lg border p-2 text-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        setNewCustomerOpen(true);
+                        setNewCustomerName("");
+                        setNewCustomerEmail("");
+                        setNewCustomerPhone("");
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50"
+                    >
+                      <UserPlus size={14} /> New
+                    </button>
+                  </div>
+                </div>
+
+                {/* Product Search */}
+                <input
+                  type="text"
+                  placeholder="Search products…"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 mb-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+
+                {/* Product List */}
+                <div className="max-h-60 overflow-y-auto border rounded-lg dark:border-slate-700 mb-4">
+                  {products
+                    .filter((p) => {
+                      const s = productSearch.trim().toLowerCase();
+                      if (!s) return true;
+                      return (
+                        p.title.toLowerCase().includes(s) ||
+                        (p.sku && p.sku.toLowerCase().includes(s)) ||
+                        (p.item_no && p.item_no.toLowerCase().includes(s))
+                      );
+                    })
+                    .map((product) => (
+                      <div
+                        key={product.id}
+                        className="flex items-center justify-between px-4 py-2 border-b last:border-0 dark:border-slate-700"
+                      >
+                        <div>
+                          <span className="font-medium">{product.title}</span>
+                          <span className="ml-2 text-xs text-slate-500">
+                            ₹{Number(product.price).toFixed(2)}
+                          </span>
+                          {product.sku && (
+                            <span className="ml-2 text-xs text-slate-400">
+                              {product.sku}
+                            </span>
+                          )}
+                        </div>
+                        {items.find((i) => i.product_id === product.id) ? (
+                          <button
+                            onClick={() => removeItem(product.id)}
+                            className="text-xs text-rose-600 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => addItem(product)}
+                            disabled={diamondsLoading}
+                            className="rounded-full bg-slate-100 px-3 py-1 text-xs hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50"
+                          >
+                            {diamondsLoading ? (
+                              <Loader2 className="animate-spin" size={12} />
+                            ) : (
+                              "Add"
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                </div>
+
+                {/* Selected Items (with Edit) */}
+                <div className="space-y-2 mb-4">
+                  <h3 className="font-semibold text-sm">Selected Items</h3>
+                  {items.map((item, idx) => (
+                    <div
+                      key={item.product_id}
+                      className="flex items-center justify-between rounded-lg border p-2 text-sm dark:border-slate-700"
+                    >
+                      <div className="flex-1">
+                        <span className="font-medium">
+                          {item.product?.title || item.product_id}
+                        </span>
+                        <span className="ml-2 text-slate-500">
+                          Qty: {item.quantity}
+                        </span>
+                        <span className="ml-2 text-slate-500">
+                          Price: ₹
+                          {item.unit_price !== undefined &&
+                          item.unit_price !== null
+                            ? item.unit_price.toFixed(2)
+                            : "—"}{" "}
+                          {item.unit_price == null && (
+                            <span className="text-xs text-amber-600">
+                              (using product default)
+                            </span>
+                          )}
+                        </span>
+                        {item.diamond_details &&
+                          item.diamond_details.length > 0 && (
+                            <span className="ml-2 text-xs text-slate-400">
+                              {item.diamond_details.length} diamonds
+                            </span>
+                          )}
+                      </div>
+                      <button
+                        onClick={() => openItemEditor(idx)}
+                        className="ml-2 inline-flex items-center gap-1 text-xs text-sky-600 hover:underline"
+                      >
+                        <Settings size={12} /> Edit
+                      </button>
+                    </div>
+                  ))}
+                  {items.length === 0 && (
+                    <p className="text-sm text-slate-400">
+                      No products added yet.
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    onClick={() => setModalOpen(false)}
+                    className="rounded-full border border-slate-300 px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateOrder}
+                    disabled={creating}
+                    className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+                  >
+                    {creating ? (
+                      <Loader2 className="animate-spin" size={16} />
+                    ) : (
+                      "Create Order"
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== ITEM EDITOR DIALOG ===== */}
+      {editingItemIndex !== null && editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Edit Item</h3>
+              <button
+                onClick={closeItemEditor}
+                className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Quantity */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editingItem.quantity}
+                  onChange={(e) =>
+                    updateEditingItem("quantity", Number(e.target.value))
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+
+              {/* Unit Price */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Selling Price (per unit)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editingItem.unit_price ?? ""}
+                  onChange={(e) =>
+                    updateEditingItem(
+                      "unit_price",
+                      e.target.value ? Number(e.target.value) : undefined
+                    )
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+
+              {/* Diamond Details */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium">Diamonds</label>
+                  <button
+                    onClick={addDiamondToEditor}
+                    className="text-xs text-sky-600 hover:underline"
+                  >
+                    + Add Diamond
+                  </button>
+                </div>
+                {editingItem.diamond_details &&
+                editingItem.diamond_details.length > 0 ? (
+                  <div className="space-y-2">
+                    {editingItem.diamond_details.map((d, di) => (
+                      <div
+                        key={di}
+                        className="border rounded-lg p-2 dark:border-slate-700 relative"
+                      >
+                        <button
+                          onClick={() => removeDiamondFromEditor(di)}
+                          className="absolute top-1 right-1 text-xs text-rose-500"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <label className="block text-slate-500">
+                              Type
+                            </label>
+                            <select
+                              value={d.diamond_type}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "diamond_type",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            >
+                              <option>NATURAL</option>
+                              <option>LAB GROWN</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">
+                              Shape
+                            </label>
+                            <input
+                              type="text"
+                              value={d.shape}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "shape",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">
+                              Color
+                            </label>
+                            <input
+                              type="text"
+                              value={d.color || ""}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "color",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">
+                              Clarity
+                            </label>
+                            <input
+                              type="text"
+                              value={d.clarity || ""}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "clarity",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">
+                              Carat
+                            </label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={d.carat}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "carat",
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">Pcs</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={d.pcs}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "pcs",
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">
+                              Rate/ct
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={d.rate}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "rate",
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-500">
+                              Total Price
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={d.total_price}
+                              onChange={(e) =>
+                                updateDiamondInEditor(
+                                  di,
+                                  "total_price",
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="w-full rounded border p-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No diamonds added.</p>
+                )}
+              </div>
+
+              {/* Metal Details */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Metal (optional)
+                </label>
+                <select
+                  value={editingItem.metal_type || ""}
+                  onChange={(e) =>
+                    updateEditingItem(
+                      "metal_type",
+                      e.target.value || undefined
+                    )
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                >
+                  <option value="">None (customer's own gold)</option>
+                  <option value="gold">Gold</option>
+                  <option value="silver">Silver</option>
+                  <option value="platinum">Platinum</option>
+                </select>
+                {editingItem.metal_type && (
+                  <>
+                    <input
+                      type="number"
+                      placeholder="Gold Carat (e.g. 18)"
+                      value={editingItem.gold_carat ?? ""}
+                      onChange={(e) =>
+                        updateEditingItem(
+                          "gold_carat",
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
+                      }
+                      className="w-full rounded-lg border p-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      step="0.001"
+                      placeholder="Total Weight (g)"
+                      value={editingItem.total_weight ?? ""}
+                      onChange={(e) =>
+                        updateEditingItem(
+                          "total_weight",
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
+                      }
+                      className="w-full rounded-lg border p-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      step="0.001"
+                      placeholder="Gold Weight (g)"
+                      value={editingItem.gold_weight ?? ""}
+                      onChange={(e) =>
+                        updateEditingItem(
+                          "gold_weight",
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
+                      }
+                      className="w-full rounded-lg border p-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Metal Rate (per g)"
+                      value={editingItem.metal_rate ?? ""}
+                      onChange={(e) =>
+                        updateEditingItem(
+                          "metal_rate",
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
+                      }
+                      className="w-full rounded-lg border p-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Total Metal Price"
+                      value={editingItem.total_metal_price ?? ""}
+                      onChange={(e) =>
+                        updateEditingItem(
+                          "total_metal_price",
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
+                      }
+                      className="w-full rounded-lg border p-2 text-sm"
+                    />
+                  </>
+                )}
+              </div>
+
+              {/* Labour */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Labour (set 0 to hide)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editingItem.labour ?? ""}
+                  onChange={(e) =>
+                    updateEditingItem(
+                      "labour",
+                      e.target.value ? Number(e.target.value) : undefined
+                    )
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+
+              {/* Profit */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Profit % (set 0 to hide)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingItem.profit_percent ?? ""}
+                    onChange={(e) =>
+                      updateEditingItem(
+                        "profit_percent",
+                        e.target.value ? Number(e.target.value) : undefined
+                      )
+                    }
+                    className="w-full rounded-lg border p-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Profit Amount
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingItem.profit_amount ?? ""}
+                    onChange={(e) =>
+                      updateEditingItem(
+                        "profit_amount",
+                        e.target.value ? Number(e.target.value) : undefined
+                      )
+                    }
+                    className="w-full rounded-lg border p-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Total Diamond Price override */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Total Diamond Price (override)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editingItem.total_diamond_price ?? ""}
+                  onChange={(e) =>
+                    updateEditingItem(
+                      "total_diamond_price",
+                      e.target.value ? Number(e.target.value) : undefined
+                    )
+                  }
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={closeItemEditor}
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveItemEditor}
+                className="rounded-full bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== NEW CUSTOMER DIALOG ===== */}
+      {newCustomerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">New Customer</h3>
+              <button onClick={() => setNewCustomerOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm">Full Name *</label>
+                <input
+                  type="text"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  className="w-full rounded-lg border p-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm">Email</label>
+                <input
+                  type="email"
+                  value={newCustomerEmail}
+                  onChange={(e) => setNewCustomerEmail(e.target.value)}
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm">Phone</label>
+                <input
+                  type="tel"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setNewCustomerOpen(false)}
+                className="rounded-full border px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateCustomer}
+                disabled={savingCustomer}
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+              >
+                {savingCustomer ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  "Create Customer"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

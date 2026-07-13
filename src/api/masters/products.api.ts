@@ -1,14 +1,37 @@
 // src/api/products.api.ts
 import { apiFetch, API_ROUTES, type ApiResponse } from "@/lib/apiClient";
+import { getAuthToken } from "@/utils/getAuthToken";
+
+// ★ Absolute backend URL (e.g. http://localhost:4500)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 /* =========================================================
-   TYPES
+   TYPES (unchanged)
 ========================================================= */
 
 export type TradeType = "import" | "export" | "both";
 
+export interface Diamond {
+  id: string;
+  product_id: string;
+  diamond_type: string;
+  shape: string;
+  color: string | null;
+  clarity: string | null;
+  carat: number;
+  pcs: number;
+  rate: number;
+  total_price: number;
+  packet_no: string | null;
+  sort_order: number;
+  metadata: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Product {
   id: string;
+  item_no: string | null;
   sku: string | null;
   title: string;
   slug: string;
@@ -30,15 +53,21 @@ export interface Product {
   meta_description?: string | null;
   canonical_url?: string | null;
   og_image?: string | null;
-  // Gemstone & metal fields
-  diamond_pcs: number;
-  diamond_carat: number;
-  rate: number;
-  diamonds: any[];            // array of gemstone objects
+  total_diamond_pcs: number;
+  total_diamond_carat: number;
+  total_diamond_price: number;
   metal_type: string;
-  gold_carat: number;         // numeric (e.g., 18, 22)
-  total_weight: number;       // in grams
-  gold_weight: number;        // in grams
+  gold_carat: number;
+  metal_rate: number;
+  total_metal_price: number;
+  total_weight: number;
+  gold_weight: number;
+  labour: number;
+  profit_percent: number;
+  profit_amount: number;
+  craftsman_id?: string | null;
+  craftsman_name?: string | null;
+  diamonds?: Diamond[];
 }
 
 export interface ProductAsset {
@@ -74,8 +103,12 @@ export interface ProductAssetsResponse extends ApiResponse {
   assets: ProductAsset[];
 }
 
+export interface ProductDiamondsResponse extends ApiResponse {
+  diamonds: Diamond[];
+}
+
 /* =========================================================
-   BASE + HELPERS
+   BASE + HELPERS (unchanged)
 ========================================================= */
 
 const BASE = `${API_ROUTES.masters}/products`;
@@ -97,19 +130,17 @@ function buildQuery(params?: Record<string, any>) {
    PUBLIC PRODUCTS
 ========================================================= */
 
-// GET /masters/products
 export async function fetchPublicProducts() {
   return apiFetch<ApiResponse & { products: Product[] }>(BASE);
 }
 
-// GET /masters/products/:slug
 export async function fetchProductBySlug(slug: string): Promise<ProductResponse> {
   if (!slug) throw new Error("product_slug_required");
   return apiFetch(`${BASE}/${encodeURIComponent(slug)}`);
 }
 
 /* =========================================================
-   ADMIN PRODUCTS (all use /admin prefix)
+   ADMIN PRODUCTS
 ========================================================= */
 
 export interface FetchProductsAdminParams {
@@ -121,21 +152,19 @@ export interface FetchProductsAdminParams {
   limit?: number;
 }
 
-// GET /masters/products/admin
 export async function fetchProductsAdmin(
   params: FetchProductsAdminParams = {}
 ): Promise<ProductsAdminListResponse> {
   return apiFetch(`${ADMIN_BASE}${buildQuery(params)}`);
 }
 
-// GET /masters/products/admin/:id
 export async function fetchProductAdmin(id: string): Promise<ProductResponse> {
   if (!id) throw new Error("product_id_required");
   return apiFetch(`${ADMIN_BASE}/${encodeURIComponent(id)}`);
 }
 
 /* =========================================================
-   CREATE / UPDATE PAYLOADS – include every backend field
+   CREATE / UPDATE PAYLOADS
 ========================================================= */
 
 export interface CreateProductPayload {
@@ -151,25 +180,21 @@ export interface CreateProductPayload {
   sku?: string | null;
   available_qty?: number;
   moq?: number;
-  metadata?: any;                   // JSON object
-  diamond_pcs?: number;
-  diamond_carat?: number;
-  rate?: number;
-  diamonds?: any[];
+  metadata?: any;
+  item_no?: string | null;
+  craftsman_id?: string | null;
+  total_diamond_pcs?: number;
+  total_diamond_carat?: number;
+  total_diamond_price?: number;
+  diamonds?: DiamondPayload[];
   metal_type?: string;
   gold_carat?: number;
-  total_weight?: number;            // grams
-  gold_weight?: number;             // grams
-}
-
-// POST /masters/products
-export async function createProductAdmin(
-  payload: CreateProductPayload
-): Promise<ProductResponse> {
-  return apiFetch(BASE, {
-    method: "POST",
-    body: payload,
-  });
+  metal_rate?: number;
+  total_metal_price?: number;
+  total_weight?: number;
+  gold_weight?: number;
+  labour?: number;
+  profit_percent?: number;
 }
 
 export interface UpdateProductPayload {
@@ -186,17 +211,43 @@ export interface UpdateProductPayload {
   available_qty?: number;
   moq?: number;
   metadata?: any;
-  diamond_pcs?: number;
-  diamond_carat?: number;
-  rate?: number;
-  diamonds?: any[];
+  item_no?: string | null;
+  craftsman_id?: string | null;
+  total_diamond_pcs?: number;
+  total_diamond_carat?: number;
+  total_diamond_price?: number;
+  diamonds?: DiamondPayload[];
   metal_type?: string;
   gold_carat?: number;
+  metal_rate?: number;
+  total_metal_price?: number;
   total_weight?: number;
   gold_weight?: number;
+  labour?: number;
+  profit_percent?: number;
 }
 
-// PUT /masters/products/admin/:id
+export interface DiamondPayload {
+  diamond_type?: string;
+  shape?: string;
+  color?: string | null;
+  clarity?: string | null;
+  carat: number;
+  pcs: number;
+  rate: number;
+  packet_no?: string | null;
+  sort_order?: number;
+}
+
+export async function createProductAdmin(
+  payload: CreateProductPayload
+): Promise<ProductResponse> {
+  return apiFetch(BASE, {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export async function updateProductAdmin(
   id: string,
   payload: UpdateProductPayload
@@ -208,7 +259,6 @@ export async function updateProductAdmin(
   });
 }
 
-// DELETE /masters/products/admin/:id
 export async function deleteProductAdmin(id: string): Promise<ApiResponse> {
   if (!id) throw new Error("product_id_required");
   return apiFetch(`${ADMIN_BASE}/${encodeURIComponent(id)}`, {
@@ -217,10 +267,9 @@ export async function deleteProductAdmin(id: string): Promise<ApiResponse> {
 }
 
 /* =========================================================
-   PRODUCT ASSETS (no /admin)
+   PRODUCT ASSETS
 ========================================================= */
 
-// GET /masters/products/:id/assets
 export async function fetchProductAssets(
   productId: string
 ): Promise<ProductAssetsResponse> {
@@ -228,7 +277,6 @@ export async function fetchProductAssets(
   return apiFetch(`${BASE}/${encodeURIComponent(productId)}/assets`);
 }
 
-// POST /masters/products/:id/assets
 export async function uploadProductAssets(
   productId: string,
   formData: FormData
@@ -240,7 +288,6 @@ export async function uploadProductAssets(
   });
 }
 
-// PATCH /masters/products/assets/:assetId/set-primary
 export async function setPrimaryProductAsset(
   assetId: string
 ): Promise<ApiResponse & { asset?: ProductAsset }> {
@@ -250,10 +297,100 @@ export async function setPrimaryProductAsset(
   });
 }
 
-// DELETE /masters/products/assets/:assetId
 export async function deleteProductAsset(assetId: string): Promise<ApiResponse> {
   if (!assetId) throw new Error("asset_id_required");
   return apiFetch(`${BASE}/assets/${encodeURIComponent(assetId)}`, {
     method: "DELETE",
   });
+}
+
+/* =========================================================
+   DIAMOND CRUD
+========================================================= */
+
+export async function fetchProductDiamonds(
+  productId: string
+): Promise<ProductDiamondsResponse> {
+  if (!productId) throw new Error("product_id_required");
+  return apiFetch(`${BASE}/${encodeURIComponent(productId)}/diamonds`);
+}
+
+export async function addProductDiamond(
+  productId: string,
+  payload: DiamondPayload
+): Promise<ApiResponse & { diamond: Diamond }> {
+  if (!productId) throw new Error("product_id_required");
+  return apiFetch(`${BASE}/${encodeURIComponent(productId)}/diamonds`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateProductDiamond(
+  productId: string,
+  diamondId: string,
+  payload: Partial<DiamondPayload>
+): Promise<ApiResponse & { diamond: Diamond }> {
+  if (!productId || !diamondId) throw new Error("product_id_and_diamond_id_required");
+  return apiFetch(`${BASE}/${encodeURIComponent(productId)}/diamonds/${encodeURIComponent(diamondId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteProductDiamond(
+  productId: string,
+  diamondId: string
+): Promise<ApiResponse> {
+  if (!productId || !diamondId) throw new Error("product_id_and_diamond_id_required");
+  return apiFetch(`${BASE}/${encodeURIComponent(productId)}/diamonds/${encodeURIComponent(diamondId)}`, {
+    method: "DELETE",
+  });
+}
+
+/* =========================================================
+   CRAFTSMEN
+========================================================= */
+
+export interface Craftsman {
+  id: string;
+  name: string;
+  code?: string;
+}
+
+export async function fetchCraftsmen(): Promise<Craftsman[]> {
+  const res = await apiFetch<{ ok: boolean; craftsmen: Craftsman[] }>(
+    `${API_ROUTES.masters}/craftsmen`
+  );
+  return res.craftsmen || [];
+}
+
+/* =========================================================
+   PRODUCT REGISTER PDF – ABSOLUTE BACKEND URL
+========================================================= */
+
+/**
+ * Download the Product Register PDF.
+ * @param token - optional auth token (from useAuth). If omitted, tries to auto‑detect from localStorage.
+ */
+export async function downloadProductRegisterPDF(token?: string) {
+  const authToken = token || getAuthToken();
+  if (!authToken) {
+    throw new Error("Not authenticated. Please log in again.");
+  }
+
+  // ★ Hard‑coded correct path to avoid double /api
+  const res = await fetch(`${API_BASE_URL}/masters/products/export/register`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+
+  if (!res.ok) throw new Error("Failed to download product register");
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `product_register_${Date.now()}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
 }

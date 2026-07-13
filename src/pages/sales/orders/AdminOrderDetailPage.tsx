@@ -16,18 +16,31 @@ import {
   Mail,
   Phone,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Gem,
+  Diamond,
+  Banknote,
+  Scale,
+  Ruler,
+  Percent,
+  X,
+  Plus,
+  FileText,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { OrderShipments } from "@/components/OrderShipments"; // ✅ new
+import { OrderShipments } from "@/components/OrderShipments";
 
 import {
   getOrderById,
   updateOrderStatus,
-  type Order,
-  type OrderItem,
+  recordOrderPayment,
+  downloadOrderInvoicePDF,   // ★ new
+  type OrderDetail,
+  type OrderItemSnapshot,
   ORDER_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
 } from "@/api/sales/orders.api";
@@ -39,13 +52,23 @@ const AdminOrderDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [order, setOrder] = useState<Order | null>(null);
-  const [items, setItems] = useState<OrderItem[]>([]);
+  const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [items, setItems] = useState<OrderItemSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
   const [status, setStatus] = useState<string>("");
   const [paymentStatus, setPaymentStatus] = useState<string>("");
+
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  // ---------- Payment Modal State ----------
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>("manual");
+  const [paymentTransactionId, setPaymentTransactionId] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   const invalidId = !id || id === "undefined";
 
@@ -69,11 +92,17 @@ const AdminOrderDetailPage: React.FC = () => {
 
   useEffect(() => {
     loadOrder();
+    // eslint-disable-next-line
   }, [id]);
 
   const formatMoney = (amount: number, currency?: string) => {
     const cur = currency || "INR";
     return `${cur} ${Number(amount || 0).toLocaleString()}`;
+  };
+
+  const formatNumber = (val?: number | null, decimals = 2) => {
+    if (val == null) return "—";
+    return Number(val).toFixed(decimals);
   };
 
   const formatDateTime = (value?: string | null) => {
@@ -97,6 +126,15 @@ const AdminOrderDetailPage: React.FC = () => {
     return "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200";
   };
 
+  const toggleExpandItem = (itemId: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
   const handleStatusUpdate = async () => {
     if (!order) return;
     if (!status) {
@@ -117,6 +155,44 @@ const AdminOrderDetailPage: React.FC = () => {
       toast.error("Failed to update order status.");
     } finally {
       setSavingStatus(false);
+    }
+  };
+
+  // ---------- Record Offline Payment ----------
+  const handleRecordPayment = async () => {
+    if (!order) return;
+    if (!paymentAmount || paymentAmount <= 0) {
+      toast.error("Please enter a valid amount.");
+      return;
+    }
+    setRecordingPayment(true);
+    try {
+      const res = await recordOrderPayment(order.id, {
+        amount: paymentAmount,
+        method: paymentMethod,
+        transaction_id: paymentTransactionId || undefined,
+        notes: paymentNotes || undefined,
+      });
+      setOrder(res.order as any);
+      toast.success("Payment recorded successfully.");
+      setPaymentModalOpen(false);
+    } catch (err: any) {
+      console.error("Failed to record payment", err);
+      toast.error(err.message || "Failed to record payment.");
+    } finally {
+      setRecordingPayment(false);
+    }
+  };
+
+  // ---------- Download Invoice ----------
+  const handleDownloadInvoice = async () => {
+    if (!order) return;
+    try {
+      await downloadOrderInvoicePDF(order.id);
+      toast.success("Invoice downloaded.");
+    } catch (err: any) {
+      console.error("Failed to download invoice", err);
+      toast.error(err.message || "Failed to download invoice.");
     }
   };
 
@@ -190,6 +266,10 @@ const AdminOrderDetailPage: React.FC = () => {
 
   const billing = parseAddress(order?.billing_address);
   const shipping = parseAddress(order?.shipping_address);
+
+  const customerFullName = (order as any)?.customer_full_name || "";
+  const customerEmail = (order as any)?.customer_email || "";
+  const customerPhone = (order as any)?.customer_phone || "";
 
   const orderTitle = order
     ? `Order #${order.order_number || order.id.slice(0, 8)}`
@@ -351,6 +431,28 @@ const AdminOrderDetailPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Action Buttons: Download Invoice + Record Payment */}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    onClick={handleDownloadInvoice}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  >
+                    <FileText size={16} /> Download Invoice
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPaymentAmount(order.grand_total);
+                      setPaymentMethod("manual");
+                      setPaymentTransactionId("");
+                      setPaymentNotes("");
+                      setPaymentModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:brightness-110"
+                  >
+                    <Plus size={16} /> Record Payment
+                  </button>
+                </div>
               </div>
 
               {/* Status form + timeline */}
@@ -448,13 +550,34 @@ const AdminOrderDetailPage: React.FC = () => {
 
             {/* ADDRESSES + SHIPMENTS + ITEMS */}
             <div className="grid gap-6 lg:grid-cols-[1.2fr,2fr]">
-              {/* Addresses + notes */}
+              {/* Addresses + notes (unchanged) */}
               <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                     <User size={16} />
                     Customer & Billing
                   </div>
+
+                  {(customerFullName || customerEmail || customerPhone) && (
+                    <div className="mb-3 pb-3 border-b border-slate-200 dark:border-slate-700">
+                      <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                        {customerFullName}
+                      </div>
+                      {customerEmail && (
+                        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          <Mail size={12} />
+                          {customerEmail}
+                        </div>
+                      )}
+                      {customerPhone && (
+                        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          <Phone size={12} />
+                          {customerPhone}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {billing ? (
                     <div className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
                       {billing.full_name && (
@@ -479,7 +602,7 @@ const AdminOrderDetailPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  ) : (
+                  ) : !customerFullName && (
                     <div className="text-sm text-slate-500 dark:text-slate-400">
                       Billing address not available.
                     </div>
@@ -494,9 +617,7 @@ const AdminOrderDetailPage: React.FC = () => {
                   {shipping ? (
                     <div className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
                       {shipping.full_name && (
-                        <div className="font-medium">
-                          {shipping.full_name}
-                        </div>
+                        <div className="font-medium">{shipping.full_name}</div>
                       )}
                       {shipping.line1 && <div>{shipping.line1}</div>}
                       {shipping.line2 && <div>{shipping.line2}</div>}
@@ -554,15 +675,14 @@ const AdminOrderDetailPage: React.FC = () => {
 
               {/* Right column: Shipments + Items */}
               <div className="space-y-4">
-                {/* ✅ Replaced with the reusable OrderShipments component */}
-              <OrderShipments
+                <OrderShipments
                   orderId={order.id}
                   orderItems={items.map((it) => ({
                     id: it.id,
-                    title: it.product_title || it.title || "Unknown product",
+                    title: it.product_title || "Unknown product",
                   }))}
                 />
-                {/* Items card */}
+                {/* Items card with full snapshot */}
                 <div className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -575,89 +695,259 @@ const AdminOrderDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm text-slate-800 dark:text-slate-200">
-                      <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                        <tr>
-                          <th className="px-4 py-3">Product</th>
-                          <th className="px-4 py-3">Quantity</th>
-                          <th className="px-4 py-3">Unit price</th>
-                          <th className="px-4 py-3">Line total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={4}
-                              className="px-4 py-6 text-center text-sm text-slate-500"
-                            >
-                              No items found for this order.
-                            </td>
-                          </tr>
-                        ) : (
-                          items.map((it) => {
-                            const title =
-                              it.product_title || it.title || "Unknown product";
-                            const unit = it.unit_price ?? 0;
-                            const total = it.line_total ?? it.subtotal ?? 0;
-                            const slug = it.slug;
-                            return (
-                              <tr
-                                key={it.id}
-                                className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                              >
-                                <td className="px-4 py-3">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="font-medium">{title}</span>
-                                    {it.sku && (
-                                      <span className="text-xs text-slate-500">
-                                        SKU: {it.sku}
-                                      </span>
-                                    )}
-                                    {slug && (
-                                      <a
-                                        href={`${PUBLIC_PRODUCT_BASE_PATH}/${slug}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-sky-600 hover:underline dark:text-sky-300"
-                                      >
-                                        <ExternalLink size={12} />
-                                        View product
-                                      </a>
-                                    )}
+                  {items.length === 0 ? (
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                      No items found for this order.
+                    </div>
+                  ) : (
+                    items.map((it) => {
+                      const isExpanded = expandedItems.has(it.id);
+                      const diamonds = it.diamond_details || [];
+                      return (
+                        <div
+                          key={it.id}
+                          className="border-t border-slate-200 dark:border-slate-700 py-4 first:border-0"
+                        >
+                          {/* Main row */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">
+                                  {it.product_title}
+                                </span>
+                                <button
+                                  onClick={() => toggleExpandItem(it.id)}
+                                  className="text-slate-500 hover:text-slate-700"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronUp size={16} />
+                                  ) : (
+                                    <ChevronDown size={16} />
+                                  )}
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
+                                {it.sku && (
+                                  <span>SKU: {it.sku}</span>
+                                )}
+                                {it.item_no && (
+                                  <span>Item: {it.item_no}</span>
+                                )}
+                                <span>
+                                  Qty: {it.quantity}
+                                </span>
+                                <span>
+                                  Unit: {formatMoney(it.unit_price, order.currency)}
+                                </span>
+                                <span className="font-semibold">
+                                  Line total: {formatMoney(it.line_total, order.currency)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expanded snapshot details */}
+                          {isExpanded && (
+                            <div className="mt-3 pl-4 border-l-4 border-slate-200 dark:border-slate-700 space-y-3">
+                              {/* Diamond details */}
+                              {diamonds.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                                    <Diamond size={14} />
+                                    Diamonds ({diamonds.length} group
+                                    {diamonds.length > 1 ? "s" : ""})
                                   </div>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className="font-medium">
-                                    {it.quantity}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  {formatMoney(
-                                    unit,
-                                    (order && order.currency) || it.currency
-                                  )}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {formatMoney(
-                                    total,
-                                    (order && order.currency) || it.currency
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-[600px] text-xs border dark:border-slate-700">
+                                      <thead className="bg-slate-100 dark:bg-slate-800">
+                                        <tr>
+                                          <th className="p-2 text-left">Type</th>
+                                          <th className="p-2 text-left">Shape</th>
+                                          <th className="p-2">Color</th>
+                                          <th className="p-2">Clarity</th>
+                                          <th className="p-2">Pcs</th>
+                                          <th className="p-2">Carat</th>
+                                          <th className="p-2">Rate</th>
+                                          <th className="p-2">Total</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {diamonds.map((d, idx) => (
+                                          <tr
+                                            key={idx}
+                                            className="border-t dark:border-slate-700"
+                                          >
+                                            <td className="p-2">{d.diamond_type || "—"}</td>
+                                            <td className="p-2">{d.shape || "—"}</td>
+                                            <td className="p-2">{d.color || "—"}</td>
+                                            <td className="p-2">{d.clarity || "—"}</td>
+                                            <td className="p-2">{d.pcs}</td>
+                                            <td className="p-2">{d.carat}</td>
+                                            <td className="p-2">{formatMoney(d.rate)}</td>
+                                            <td className="p-2">{formatMoney(d.total_price)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Metal & Pricing */}
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs text-slate-600 dark:text-slate-300">
+                                {it.metal_type && (
+                                  <div className="flex items-center gap-1">
+                                    <Gem size={12} />
+                                    <span>
+                                      Metal: {it.metal_type} {it.gold_carat}K
+                                    </span>
+                                  </div>
+                                )}
+                                {it.total_weight != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Scale size={12} />
+                                    <span>Total Wt: {formatNumber(it.total_weight, 3)} g</span>
+                                  </div>
+                                )}
+                                {it.gold_weight != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Ruler size={12} />
+                                    <span>Gold Wt: {formatNumber(it.gold_weight, 3)} g</span>
+                                  </div>
+                                )}
+                                {it.total_diamond_price != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Diamond size={12} />
+                                    <span>Diamond Price: {formatMoney(it.total_diamond_price)}</span>
+                                  </div>
+                                )}
+                                {it.total_metal_price != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Gem size={12} />
+                                    <span>Metal Price: {formatMoney(it.total_metal_price)}</span>
+                                  </div>
+                                )}
+                                {it.labour != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Banknote size={12} />
+                                    <span>Labour: {formatMoney(it.labour)}</span>
+                                  </div>
+                                )}
+                                {it.profit_percent != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Percent size={12} />
+                                    <span>Profit: {formatNumber(it.profit_percent)}%</span>
+                                  </div>
+                                )}
+                                {it.profit_amount != null && (
+                                  <div className="flex items-center gap-1">
+                                    <Banknote size={12} />
+                                    <span>Profit Amt: {formatMoney(it.profit_amount)}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Primary image thumbnail (optional) */}
+                              {it.primary_image_url && (
+                                <img
+                                  src={it.primary_image_url}
+                                  alt={it.product_title}
+                                  className="mt-2 h-16 w-16 rounded object-cover border"
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
           </>
         )}
       </div>
+
+      {/* ===================================================
+           RECORD PAYMENT MODAL
+      =================================================== */}
+      {paymentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-950">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Record Payment</h3>
+              <button onClick={() => setPaymentModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm">Amount *</label>
+                <input
+                  type="number"
+                  min={1}
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                  className="w-full rounded-lg border p-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm">Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full rounded-lg border p-2 text-sm"
+                >
+                  <option value="manual">Cash / Other</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="upi">UPI</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="razorpay">Razorpay (Admin)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm">Transaction ID (optional)</label>
+                <input
+                  type="text"
+                  value={paymentTransactionId}
+                  onChange={(e) => setPaymentTransactionId(e.target.value)}
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm">Notes</label>
+                <textarea
+                  rows={2}
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  className="w-full rounded-lg border p-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPaymentModalOpen(false)}
+                className="rounded-full border px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRecordPayment}
+                disabled={recordingPayment}
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+              >
+                {recordingPayment ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  "Record Payment"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -95,6 +95,8 @@ import AdminPaymentCollectionPage from "./pages/finance/AdminPaymentCollectionPa
 // CONTENT
 import HeroSlidesPage from "./pages/content/HeroSlidesPage";
 import InstallButton from "./components/InstallButton";
+import AdminAddCustomerPage from "./pages/AdminAddCustomerPage";
+
 const App: React.FC = () => {
   return (
     <>
@@ -197,6 +199,7 @@ const App: React.FC = () => {
 
           {/* Content Management */}
           <Route path="content/hero-slides" element={<HeroSlidesPage />} />
+          <Route path="/admin/customers/new" element={<AdminAddCustomerPage />} />
 
           {/* Misc */}
           <Route path="print" element={<PrintCenterPage />} />

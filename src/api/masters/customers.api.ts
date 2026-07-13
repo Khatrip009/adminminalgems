@@ -41,6 +41,17 @@ export async function getCustomerFull(
 }
 
 /* ---------------------------------------------
+   CREATE CUSTOMER (for walk‑in / new customer)
+--------------------------------------------- */
+export async function createCustomer(payload: {
+  full_name: string;
+  email?: string;
+  phone?: string;
+}) {
+  return api.post(`${BASE}`, payload);
+}
+
+/* ---------------------------------------------
    UPDATE CUSTOMER
 --------------------------------------------- */
 export async function updateCustomer(
