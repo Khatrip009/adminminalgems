@@ -15,7 +15,7 @@ export interface ApiResponse<T = any> {
 ===================================================== */
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
-  "https://apiminalgems.co.in/api";
+  "https://apiminalgems.exotech.co.in/api";
 
 export const API_BASE_URL = API_BASE;
 
